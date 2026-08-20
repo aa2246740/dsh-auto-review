@@ -1,0 +1,5 @@
+id: dsh-approve-for-me
+entry: src/dsh-approve-for-me.ts
+marker: "[my-plugins/dsh-approve-for-me] loaded"
+kind: client
+profile: web

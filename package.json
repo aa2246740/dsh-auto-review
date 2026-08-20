@@ -1,0 +1,86 @@
+{
+  "name": "dsh-approve-for-me",
+  "version": "0.1.0",
+  "description": "Codex-style Auto-review and Approve for me mode for DeepSeek Harness",
+  "type": "module",
+  "main": "lib/dsh-approve-for-me.js",
+  "types": "lib/types/dsh-approve-for-me.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/dsh-approve-for-me.d.ts",
+      "default": "./lib/dsh-approve-for-me.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib/*.js",
+    "lib/*.js.map",
+    "lib/types/**/*.d.ts",
+    "cordis.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aa2246740/dsh-auto-review.git"
+  },
+  "homepage": "https://github.com/aa2246740/dsh-auto-review#readme",
+  "bugs": {
+    "url": "https://github.com/aa2246740/dsh-auto-review/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "auto-review",
+    "approval",
+    "oauth"
+  ],
+  "author": "aa2246740",
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-user-approval": "^0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-user-approval": "^0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

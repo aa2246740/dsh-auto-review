@@ -1,0 +1,9 @@
+node_modules
+lib/
+coverage/
+.dshx/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log

@@ -1,0 +1,22 @@
+# portable overlay: relative name only. --patch resolves against the profile
+# directory, so cold-boot through `dshx start` / `dshx verify-boot`, not raw pnpm dsh.
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      approve-for-me:
+        sandbox: workspace-write
+        approval: ask
+        name: Approve for me
+        description: Keep workspace confinement and delegate approval questions to the configured OAuth reviewer.
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+- insert:
+    - id: dsh-approve-for-me
+      name: './src/dsh-approve-for-me.ts'

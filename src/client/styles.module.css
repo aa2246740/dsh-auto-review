@@ -1,0 +1,171 @@
+.card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.permissionModeIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.permissionModeIcon svg {
+  display: block;
+}
+
+.permissionModeIconMenu {
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.permissionModeIconTrigger {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+.permissionModeIconTrigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Mirror DSH's built-in permission-chip collapse on narrow composers. */
+@container (max-width: 460px) {
+  :global([data-dsh-approve-for-me-trigger]) :global([data-dsh-approve-for-me-label]) {
+    display: none;
+  }
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.subtitle,
+.muted,
+.warning,
+.details p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.subtitle,
+.muted,
+.details p {
+  color: color-mix(in srgb, currentColor 66%, transparent);
+}
+
+.warning {
+  color: #c2410c;
+}
+
+.switchLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.switchLabel input {
+  width: 17px;
+  height: 17px;
+  accent-color: #16a34a;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field select,
+.advancedGrid input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 9px;
+  color: inherit;
+  background: Canvas;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.refresh {
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.refresh:disabled,
+.field select:disabled,
+.advancedGrid input:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.details {
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 13px;
+}
+
+.details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.advancedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.advancedGrid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+@media (max-width: 680px) {
+  .heading,
+  .statusRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .advancedGrid {
+    grid-template-columns: 1fr;
+  }
+}
