@@ -94,8 +94,9 @@ authorization. See OpenAI's [Auto-review documentation](https://learn.chatgpt.co
 and the open-source Codex [reviewer policy template](https://github.com/openai/codex/blob/main/codex-rs/core/src/guardian/policy_template.md).
 
 Provider-classified transport truncation is retried once by default. Each
-attempt receives its own deadline. Timeout messages name the selected provider
-and model instead of exposing the underlying adapter protocol.
+attempt receives its own deadline. Every failure after route resolution names
+the requested provider and model before preserving the adapter's original
+error, so a protocol-specific error cannot be mistaken for a route switch.
 
 See [SECURITY.md](SECURITY.md) for reporting and trust-boundary details.
 

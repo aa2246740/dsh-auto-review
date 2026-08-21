@@ -242,8 +242,9 @@ export function parseReviewDecision(text: string): ReviewDecision {
   return { decision: record['decision'], reason: record['reason'].trim().slice(0, 500) }
 }
 
-function failureDecision(message: string): ReviewDecision {
-  return { decision: 'ask', reason: `自动审批未能安全完成：${message}` }
+function failureDecision(message: string, route?: ReviewerRoute): ReviewDecision {
+  const attribution = route === undefined ? '' : `（请求模型：${routeLabel(route)}）`
+  return { decision: 'ask', reason: `自动审批未能安全完成${attribution}：${message}` }
 }
 
 class ReviewAttemptFailure extends Error {
@@ -305,9 +306,11 @@ export class ApprovalReviewer {
 
   /** Review one action; every transport, timeout, and parse failure asks the human. */
   async review(subject: ReviewSubject, parentSignal?: AbortSignal): Promise<ReviewDecision> {
+    let requestedRoute: ReviewerRoute | undefined
     try {
       const settings = this.settings()
       const route = await this.resolveRoute(subject, parentSignal)
+      requestedRoute = route
       const timeoutMs = settings.timeoutMs ?? 30_000
       const retries = settings.transportRetries ?? 1
       for (let attempt = 0; ; attempt += 1) {
@@ -356,7 +359,7 @@ export class ApprovalReviewer {
       }
     } catch (error: unknown) {
       if (parentSignal?.aborted === true) throw error
-      return failureDecision(safeMessage(error))
+      return failureDecision(safeMessage(error), requestedRoute)
     }
   }
 

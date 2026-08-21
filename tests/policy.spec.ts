@@ -333,21 +333,31 @@ describe('reviewer contracts', () => {
     })).resolves.toEqual({ decision: 'allow', reason: 'authorized' })
     expect(String(calls[0]?.reasoningEffort)).toBe('minimal')
     expect(calls[0]?.maxTokens).toBe(256)
+    expect(calls[0]).not.toHaveProperty('tools')
   })
 
-  it('falls back to a human on provider failure', async () => {
+  it('attributes a provider failure to the requested reviewer route', async () => {
     const ctx = {
       llm: {
-        listProviders: () => [{ id: 'pi-test', name: 'Test' }],
-        resolveModelInfo: async () => ({ provider: 'pi-test', id: 'model', name: 'Model' }),
+        listProviders: () => [{ id: 'pi-xai', name: 'xAI Grok' }],
+        resolveModelInfo: async () => ({ provider: 'pi-xai', id: 'grok-4.5', name: 'Grok 4.5' }),
         stream: () => (async function* (): AsyncGenerator<StreamChunk> {
-          yield { type: 'finish', reason: { kind: 'error', failure: { message: 'auth failed', code: 'AUTH' } } }
+          yield {
+            type: 'finish',
+            reason: {
+              kind: 'error',
+              failure: {
+                message: "Codex error: Tool 'image_generation' is not supported with gpt-5.3-codex-spark",
+                code: 'UNSUPPORTED_OPTION',
+              },
+            },
+          }
         })(),
       },
       logger: { info: () => {} },
     } as unknown as Context
     const reviewer = new ApprovalReviewer(ctx, () => ({
-      modelMode: 'fixed', reviewerRoute: JSON.stringify(['pi-test', 'model']), timeoutMs: 1_000,
+      modelMode: 'fixed', reviewerRoute: JSON.stringify(['pi-xai', 'grok-4.5']), timeoutMs: 1_000,
     }))
     const decision = await reviewer.review({
       stage: 'pre-execute',
@@ -359,7 +369,8 @@ describe('reviewer contracts', () => {
       downstream: { kind: 'allow' },
     })
     expect(decision.decision).toBe('ask')
-    expect(decision.reason).toContain('auth failed')
+    expect(decision.reason).toContain('请求模型：xAI Grok · grok-4.5')
+    expect(decision.reason).toContain("Codex error: Tool 'image_generation'")
   })
 
   it('retries one transient OAuth stream that ends before its terminal event', async () => {
