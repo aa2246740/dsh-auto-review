@@ -40,7 +40,7 @@ const BROAD_READ_ROOT = /^(?:\/|~|\$HOME|\$\{HOME\}|\/[Uu]sers\/[^/]+)\/?$/
 const PARENT_PATH_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/
 
 const SAFE_METADATA_COMMANDS = new Set([
-  'df', 'du', 'file', 'ls', 'pwd', 'readlink', 'realpath', 'stat', 'wc',
+  'df', 'du', 'file', 'head', 'ls', 'pwd', 'readlink', 'realpath', 'stat', 'wc',
 ])
 
 const SAFE_FIND_ZERO_ARITY = new Set([
@@ -82,29 +82,6 @@ function candidatePaths(args: unknown): string[] {
   ]
 }
 
-function withinWorkspace(candidate: string, cwd: string): boolean {
-  if (SENSITIVE_PATH.test(candidate)) return false
-  if (candidate === '~' || candidate.startsWith('~/') || /\$(?:\{HOME\}|HOME)/.test(candidate)) return false
-  const normalize = (value: string): string => {
-    const portable = value.replaceAll('\\', '/')
-    const drive = portable.match(/^[a-z]:/i)?.[0]?.toLowerCase() ?? ''
-    const absolute = drive.length > 0 || portable.startsWith('/')
-    const body = drive.length > 0 ? portable.slice(drive.length) : portable
-    const segments: string[] = []
-    for (const segment of body.split('/')) {
-      if (segment.length === 0 || segment === '.') continue
-      if (segment === '..') segments.pop()
-      else segments.push(segment)
-    }
-    return `${drive}${absolute ? '/' : ''}${segments.join('/')}`
-  }
-  const base = normalize(cwd)
-  const absolute = /^(?:[a-z]:[\\/]|\/)/i.test(candidate)
-    ? normalize(candidate)
-    : normalize(`${base}/${candidate}`)
-  return absolute === base || absolute.startsWith(`${base}/`)
-}
-
 function shellText(args: unknown): string {
   const record = recordOf(args)
   if (record === undefined) return JSON.stringify(args) ?? ''
@@ -114,8 +91,8 @@ function shellText(args: unknown): string {
 }
 
 /**
- * Tokenize only the deliberately tiny shell grammar accepted by the fast path.
- * Any operator, substitution, expansion, newline, or malformed quote fails
+ * Tokenize one command segment from the deliberately tiny observation grammar.
+ * Expansion, substitution, globbing outside quotes, or malformed quoting fails
  * closed and leaves the command to the model reviewer.
  */
 function observationTokens(command: string): string[] | undefined {
@@ -183,6 +160,87 @@ function observationTokens(command: string): string[] | undefined {
   if (quote !== undefined) return undefined
   push()
   return tokens.length === 0 ? undefined : tokens
+}
+
+/**
+ * Split a sequence of read-only commands while accepting only stdout pipes,
+ * semicolon sequencing, and the non-writing `2>&1` descriptor merge.
+ */
+function observationCommands(script: string): string[][] | undefined {
+  const commands: string[] = []
+  let command = ''
+  let quote: 'single' | 'double' | undefined
+  const push = (): boolean => {
+    const value = command.trim()
+    if (value.length === 0) return false
+    commands.push(value)
+    command = ''
+    return true
+  }
+
+  for (let index = 0; index < script.length; index += 1) {
+    const character = script[index]!
+    if (quote === 'single') {
+      command += character
+      if (character === "'") quote = undefined
+      continue
+    }
+    if (quote === 'double') {
+      if (character === '$' || character === '`' || character === '\n' || character === '\r') {
+        return undefined
+      }
+      command += character
+      if (character === '"') quote = undefined
+      else if (character === '\\') {
+        const next = script[index + 1]
+        if (next === undefined || next === '\n' || next === '\r') return undefined
+        index += 1
+        command += next
+      }
+      continue
+    }
+
+    if (character === "'") {
+      quote = 'single'
+      command += character
+      continue
+    }
+    if (character === '"') {
+      quote = 'double'
+      command += character
+      continue
+    }
+    if (character === '\\') {
+      const next = script[index + 1]
+      if (next === undefined || next === '\n' || next === '\r') return undefined
+      command += character + next
+      index += 1
+      continue
+    }
+
+    if (script.slice(index, index + 4) === '2>&1') {
+      const previous = script[index - 1]
+      const next = script[index + 4]
+      const startsToken = previous === undefined || /\s/.test(previous)
+      const endsToken = next === undefined || /[\s;|]/.test(next)
+      if (!startsToken || !endsToken) return undefined
+      command += ' '
+      index += 3
+      continue
+    }
+    if (character === ';' || character === '|') {
+      if (script[index + 1] === character || !push()) return undefined
+      continue
+    }
+    if ('$`&<>()>\n\r'.includes(character)) return undefined
+    command += character
+  }
+  if (quote !== undefined || !push()) return undefined
+
+  const tokenized = commands.map(observationTokens)
+  return tokenized.every((tokens): tokens is string[] => tokens !== undefined)
+    ? tokenized
+    : undefined
 }
 
 function safeObservationPath(path: string, cwd: string | undefined): boolean {
@@ -254,6 +312,16 @@ function safeFindCommand(tokens: readonly string[], cwd: string | undefined): bo
   return true
 }
 
+function safeEchoCommand(tokens: readonly string[]): boolean {
+  return tokens[0] === 'echo'
+}
+
+function safeObservationCommand(tokens: readonly string[], cwd: string | undefined): boolean {
+  return safeMetadataCommand(tokens, cwd)
+    || safeFindCommand(tokens, cwd)
+    || safeEchoCommand(tokens)
+}
+
 function deterministicShellObservation(exec: ToolExecution): ReviewDecision | undefined {
   if (exec.name !== 'bash') return undefined
   const args = recordOf(exec.arguments)
@@ -263,10 +331,11 @@ function deterministicShellObservation(exec: ToolExecution): ReviewDecision | un
   const cwd = typeof args['workdir'] === 'string'
     ? args['workdir']
     : exec.agent?.session.header.cwd
-  const tokens = observationTokens(args['command'])
-  if (tokens === undefined) return undefined
-  if (!safeMetadataCommand(tokens, cwd) && !safeFindCommand(tokens, cwd)) return undefined
-  return { decision: 'allow', reason: '命令仅执行无副作用的本地观察。' }
+  const commands = observationCommands(args['command'])
+  if (commands === undefined || !commands.every(tokens => safeObservationCommand(tokens, cwd))) {
+    return undefined
+  }
+  return { decision: 'allow', reason: '命令链仅执行有界、无副作用的本地观察。' }
 }
 
 /** Match only catastrophic machine-wide operations, not ordinary exact-target cleanup. */
@@ -306,14 +375,13 @@ export function deterministicDecision(exec: ToolExecution): ReviewDecision | und
   if (!WORKSPACE_READ_TOOLS.has(exec.name)) return undefined
 
   const cwd = exec.agent?.session.header.cwd
-  if (cwd === undefined) return undefined
   const paths = candidatePaths(exec.arguments)
   // glob/grep/lsp default to the session cwd when no explicit root is supplied.
   if (paths.length === 0 && exec.name !== 'read' && exec.name !== 'read_image') {
     return { decision: 'allow', reason: '在当前工作区内执行只读查询。' }
   }
-  if (paths.length > 0 && paths.every(path => withinWorkspace(path, cwd))) {
-    return { decision: 'allow', reason: '读取目标位于当前工作区且不命中敏感路径。' }
+  if (paths.length > 0 && paths.every(path => safeObservationPath(path, cwd))) {
+    return { decision: 'allow', reason: '读取目标有界且不命中敏感路径。' }
   }
   return undefined
 }

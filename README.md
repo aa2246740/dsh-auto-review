@@ -23,11 +23,17 @@ This project is not affiliated with or endorsed by DeepSeek or OpenAI.
   model selected in the plugin settings. Reasoning defaults to the lowest level
   advertised by that model.
 - Allows proven, side-effect-free local observations without an LLM round trip.
-  The conservative Bash parser recognizes metadata commands such as `pwd`,
-  `ls`, `stat`, `file`, `readlink`, `realpath`, `df`, `du`, `wc`, and a bounded
-  `find` subset.
+  Bounded, non-sensitive `read`, `grep`, `glob`, `lsp`, and `read_image` calls
+  may target local paths outside the writable root. The conservative Bash
+  parser recognizes metadata commands such as `pwd`, `ls`, `head`, `stat`,
+  `file`, `readlink`, `realpath`, `df`, `du`, `wc`, and a bounded `find` subset.
+  It also proves sequences made only from those commands, stdout pipes, and the
+  non-writing `2>&1` descriptor merge.
 - Rejects catastrophic machine-wide deletion deterministically.
-- Sends ambiguous eligible actions to the reviewer. Transport failure,
+- Sends other eligible actions to a reviewer that classifies intrinsic risk
+  separately from user authorization. The reviewer receives bounded direct
+  user requests plus the trusted DSH request-header instructions; prior tool
+  output remains untrusted evidence. Transport failure,
   malformed output, unavailable OAuth, timeout, or uncertainty falls back to
   DSH's ordinary human approval UI.
 - Never overrides a downstream denial or DSH's monotonic tool guards.
@@ -75,11 +81,17 @@ mount creates a duplicate Loader ID instead of a second safety layer.
 
 ## Safety model
 
-The fast path is an allowlist, not a shell denylist. Shell operators,
-substitutions, redirects, writes, sensitive paths, broad roots, background
-commands, malformed quoting, and anything the parser cannot prove safe go to
-review. Reviewer input is bounded and treats prior tool output as untrusted
-context.
+The fast path is an allowlist, not a shell denylist. It accepts `;` and `|` only
+when every segment is independently proven read-only, and accepts only the
+non-writing `2>&1` redirect. Substitutions, expansions, output redirects,
+writes, sensitive paths, broad roots, background commands, malformed quoting,
+and anything the parser cannot prove safe go to review.
+
+The reviewer policy follows the public Codex Auto-review design: swapping the
+reviewer does not widen the sandbox, an outside-writable-root path is not
+dangerous by itself, and decisions are based on intrinsic risk plus trusted
+authorization. See OpenAI's [Auto-review documentation](https://learn.chatgpt.com/docs/sandboxing/auto-review)
+and the open-source Codex [reviewer policy template](https://github.com/openai/codex/blob/main/codex-rs/core/src/guardian/policy_template.md).
 
 Provider-classified transport truncation is retried once by default. Each
 attempt receives its own deadline. Timeout messages name the selected provider
