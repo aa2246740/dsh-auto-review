@@ -8,33 +8,33 @@ It does not turn the session into Full access.
 
 The git repo is `dsh-auto-review`. The plugin ID stays `dsh-approve-for-me` so existing installs keep working.
 
+The shots below are official DeepSeek Harness Web (an RC8 local build) with the plugin loaded and **Approve for me** selected.
+
 ![Approve for me settings card](docs/screenshots/settings-card.png)
-
-The same policy, three real actions: `ls src` is allowed, reading `.env` goes to the model, `rm -rf /` is denied locally.
-
-![Allow, ask, deny](docs/screenshots/review-loop.gif)
-
-**Allow** — bounded, side-effect-free local observation. No prompt.
-
-![Allow](docs/screenshots/allow.png)
-
-**Ask the model** — the fast path cannot prove it, for example reading `.env`. If the model will not decide either, you are asked.
-
-![Ask the model](docs/screenshots/pending.png)
-
-**Deny** — wiping the machine never reaches the model.
-
-![Deny](docs/screenshots/deny.png)
 
 Once **Approve for me** is selected, the plugin paints its own shield-and-spark glyph on that row. The three official modes are left alone.
 
 ![Approve for me permission menu](docs/screenshots/permission-menu.png)
 
+`pwd && ls` finishes without the ordinary approval bar.
+
+![Allow, ask, deny](docs/screenshots/review-loop.gif)
+
+**Allow** — bounded, side-effect-free local observation. In this official session `pwd && ls` printed the workspace listing. No Allow once.
+
+![Allow](docs/screenshots/allow.png)
+
+**Ask the model** — the fast path cannot prove it, for example reading `.env`. The official UI stays on Deep diving or the ordinary approval panel. If the model will not decide either, you are asked.
+
+![Ask the model](docs/screenshots/pending.png)
+
+**Deny** — `rm -rf /` never reaches the reviewer. The official tool row fails with `拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
+
+![Deny](docs/screenshots/deny.png)
+
 Timeout, retries, and the output cap live under the fold.
 
 ![Safety bounds and advanced settings](docs/screenshots/settings-advanced.png)
-
-> Full DeepSeek Harness Web did not boot when these shots were taken. The docs machine had no RC8 checkout or dshx, and its Node is 22.14, below the 22.19 floor. What you see is this repo's local demo: the settings card and shield glyph are the real `src/client` components, and the allow / deny / ask cards are live `deterministicDecision` results. This is not official Harness chrome.
 
 The settings copy is Chinese because that is the product UI.
 

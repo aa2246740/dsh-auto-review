@@ -8,33 +8,33 @@ DeepSeek Harness 跑工具前会停下来问你。这个插件在权限菜单里
 
 仓库叫 `dsh-auto-review`，插件 ID 仍是 `dsh-approve-for-me`，已经装过的不用改名。
 
+下面的图都来自官方 DeepSeek Harness Web（RC8 本地构建），插件已加载，输入框选中 **Approve for me**。
+
 ![替我审批设置卡](docs/screenshots/settings-card.png)
-
-三种真实判定：`ls src` 直接过，读 `.env` 交给模型，`rm -rf /` 本地拒绝。
-
-![从放到拒](docs/screenshots/review-loop.gif)
-
-**放行** — 有界、没副作用的本地观察，不必弹窗。
-
-![放行](docs/screenshots/allow.png)
-
-**先问模型** — 快速通道证明不了，比如读 `.env`。模型也不敢判就还是问你。
-
-![先问模型](docs/screenshots/pending.png)
-
-**拒绝** — 整盘删除到不了模型那一步。
-
-![拒绝](docs/screenshots/deny.png)
 
 输入框里选中 **Approve for me** 之后，插件会给这一档补上自己的盾牌星标。另外三种官方模式它不管。
 
 ![Approve for me 权限菜单](docs/screenshots/permission-menu.png)
 
+`pwd && ls` 直接跑完，没有普通审批条。
+
+![从放到拒](docs/screenshots/review-loop.gif)
+
+**放行** — 有界、没副作用的本地观察。官方会话里 `pwd && ls` 出了工作区列表，中间没有 Allow once。
+
+![放行](docs/screenshots/allow.png)
+
+**先问模型** — 快速通道证明不了，比如读 `.env`。界面停在官方的 Deep diving / 普通审批；模型也不敢判就还是问你。
+
+![先问模型](docs/screenshots/pending.png)
+
+**拒绝** — `rm -rf /` 到不了审批模型。工具行是官方的失败态：`拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
+
+![拒绝](docs/screenshots/deny.png)
+
 超时、重试、最大输出这些藏在设置卡底部。
 
 ![安全边界与高级参数](docs/screenshots/settings-advanced.png)
-
-> 完整 DeepSeek Harness Web 在拍这些图时没能启动。缺 RC8 检出和 dshx，拍图环境的 Node 也还是 22.14，低于官方的 22.19。上面是本仓库的本地演示：设置卡和盾牌图标来自 `src/client` 的原组件，放行 / 拒绝 / 先问模型走的是同一套 `deterministicDecision`。不是官方 Harness 外壳。
 
 ## 装上
 
