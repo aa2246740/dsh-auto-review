@@ -1,16 +1,16 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { installApproveForMeIcon } from './permission-mode-icon.ts'
 import styles from './styles.module.css'
 
 export const name = 'dsh-approve-for-me-client'
-export const inject = ['slots', 'settingsScope']
+export const inject = ['slots', 'settingsScope', 'connection']
 
 const SETTINGS_NAMESPACE = 'dsh-approve-for-me'
-const OAUTH_STATUS_PATH = '/plugins/dsh-oauth-login/auth/status'
 
 interface ReviewerSettings {
   enabled?: boolean
@@ -20,14 +20,7 @@ interface ReviewerSettings {
   timeoutMs?: number
   transportRetries?: number
   maxOutputTokens?: number
-}
-
-interface OAuthProviderStatus {
-  route: string
-  displayName: string
-  account:
-    | { status: 'signed-in'; models: string[] }
-    | { status: string }
+  repeatApprovalMode?: 'same-request-exact' | 'off'
 }
 
 interface RouteOption {
@@ -37,33 +30,21 @@ interface RouteOption {
 
 interface CardInjected {
   scope: SettingsScope<ReviewerSettings>
-}
-
-function parseStatus(value: unknown): OAuthProviderStatus[] {
-  if (!Array.isArray(value)) throw new Error('OAuth status response is not a list')
-  return value.filter((item): item is OAuthProviderStatus => {
-    if (typeof item !== 'object' || item === null) return false
-    const row = item as Record<string, unknown>
-    return typeof row['route'] === 'string'
-      && typeof row['displayName'] === 'string'
-      && typeof row['account'] === 'object'
-      && row['account'] !== null
-      && typeof (row['account'] as Record<string, unknown>)['status'] === 'string'
-  })
-}
-
-function routeOptions(providers: OAuthProviderStatus[]): RouteOption[] {
-  return providers.flatMap((provider) => provider.account.status !== 'signed-in' || !('models' in provider.account)
-    ? []
-    : provider.account.models.map(model => ({
-        value: JSON.stringify([provider.route, model]),
-        label: `${provider.displayName} · ${model}`,
-      })))
+  loadCatalog: () => Promise<RouteOption[]>
 }
 
 /** Register the official Plugins-page card and bind it to durable Host settings. */
 export function apply(ctx: ClientContext): void {
   const scope = ctx.settingsScope.bind<ReviewerSettings>({ namespace: SETTINGS_NAMESPACE })
+  const connection = ctx.get('connection') as ConnectionHandle
+  const loadCatalog = async (): Promise<RouteOption[]> => {
+    const response = await connection.api.llm.models({})
+    if (!response.result.ok) throw new Error(response.result.error.message)
+    return response.result.value.groups.flatMap(group => group.models.map(model => ({
+      value: JSON.stringify([group.id, model.id]),
+      label: `${group.name} · ${model.name}`,
+    })))
+  }
   ctx.effect(
     () => installApproveForMeIcon(),
     'dsh-approve-for-me: decorate the dedicated permission preset',
@@ -71,35 +52,33 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
     name: 'settings.plugin.item',
     key: SETTINGS_NAMESPACE,
-    inject: (): CardInjected => ({ scope }),
+    inject: (): CardInjected => ({ scope, loadCatalog }),
   }, DshApproveForMeCard))
 }
 
 function DshApproveForMeCard(props: Partial<CardInjected>): ReactNode {
   const scope = props.scope
-  if (scope === undefined) return null
-  return <LoadedCard scope={scope} />
+  const loadCatalog = props.loadCatalog
+  if (scope === undefined || loadCatalog === undefined) return null
+  return <LoadedCard scope={scope} loadCatalog={loadCatalog} />
 }
 
-function LoadedCard({ scope }: CardInjected): ReactNode {
+function LoadedCard({ scope, loadCatalog }: CardInjected): ReactNode {
   const snapshot = useSyncExternalStore(
     listener => scope.subscribe(listener),
     () => scope.getSnapshot(),
   )
-  const [providers, setProviders] = useState<OAuthProviderStatus[]>([])
+  const [options, setOptions] = useState<RouteOption[]>([])
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [catalogError, setCatalogError] = useState('')
   const [writing, setWriting] = useState(false)
   const settings = snapshot.value
-  const options = useMemo(() => routeOptions(providers), [providers])
-
   const refresh = (): void => {
     setCatalogState('loading')
     setCatalogError('')
-    void fetch(OAUTH_STATUS_PATH, { headers: { accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
-        setProviders(parseStatus(await response.json()))
+    void loadCatalog()
+      .then((next) => {
+        setOptions(next)
         setCatalogState('ready')
       })
       .catch((error: unknown) => {
@@ -108,7 +87,7 @@ function LoadedCard({ scope }: CardInjected): ReactNode {
       })
   }
 
-  useEffect(refresh, [])
+  useEffect(refresh, [loadCatalog])
 
   const write = async (operation: () => Promise<void>): Promise<void> => {
     setWriting(true)
@@ -193,20 +172,35 @@ function LoadedCard({ scope }: CardInjected): ReactNode {
 
       <div className={styles['statusRow']}>
         <span className={catalogState === 'error' ? styles['warning'] : styles['muted']}>
-          {catalogState === 'loading' && '正在读取 OAuth 模型…'}
-          {catalogState === 'ready' && options.length === 0 && '尚未登录 OAuth 模型；需要审批时会回退给你。'}
-          {catalogState === 'ready' && options.length > 0 && `可用 OAuth 模型 ${String(options.length)} 个`}
-          {catalogState === 'error' && `无法读取 dsh-oauth-login：${catalogError}`}
+          {catalogState === 'loading' && '正在读取 DSH 模型目录…'}
+          {catalogState === 'ready' && options.length === 0 && '当前没有已注册模型；需要审批时会回退给你。'}
+          {catalogState === 'ready' && options.length > 0 && `可用 DSH 模型 ${String(options.length)} 个`}
+          {catalogState === 'error' && `无法读取 DSH 模型目录：${catalogError}`}
         </span>
         <button type="button" className={styles['refresh']} onClick={refresh} disabled={catalogState === 'loading'}>
           刷新
         </button>
       </div>
 
+      <label className={styles['field']}>
+        <span className={styles['fieldLabel']}>相同操作复用</span>
+        <select
+          value={settings.repeatApprovalMode ?? 'same-request-exact'}
+          disabled={!enabled || !snapshot.writable || writing}
+          onChange={event => {
+            void write(() => scope.set('repeatApprovalMode', event.target.value))
+          }}
+        >
+          <option value="same-request-exact">同一用户任务内精确匹配（默认）</option>
+          <option value="off">每次重新审批</option>
+        </select>
+      </label>
+
       <details className={styles['details']}>
         <summary>安全边界与高级参数</summary>
         <p>只处理注册工具的 pre-execute 与 approval 请求；斜杠命令、后台任务和插件私有 Host RPC 不在覆盖面内。</p>
-        <p>保留 Workspace Write 沙箱；只有 Approve for me 模式把审批交给 OAuth 模型，Full access 仍由官方模式负责。</p>
+        <p>保留 Workspace Write 沙箱；OAuth 与 API Key 模型都通过 DSH 的统一 LLM 目录调用，Full access 仍由官方模式负责。</p>
+        <p>精确复用同时绑定工具名、完整参数、工作目录和最近一条用户请求；新用户消息、换会话或重启 Host 后自动失效。</p>
         <p>模型失败、重试耗尽、超时、输出不合规或上下文不足时不会放行，而是继续显示人工审批。</p>
         <div className={styles['advancedGrid']}>
           <label>

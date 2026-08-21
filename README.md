@@ -3,8 +3,8 @@
 An unofficial external plugin that adds a Codex-style **Approve for me** mode to
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It keeps
 the official workspace sandbox in place and delegates eligible approval
-questions to a model already signed in through
-[dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login).
+questions to a model registered in DSH's unified LLM directory. Both OAuth
+models and API-key configured providers are supported.
 
 > Project: `dsh-auto-review` · plugin ID: `dsh-approve-for-me` · permission
 > preset: `approve-for-me`. The plugin ID is intentionally retained for
@@ -19,9 +19,9 @@ This project is not affiliated with or endorsed by DeepSeek or OpenAI.
 - Keeps DSH's official `workspace-write` sandbox and `ask` approval policy.
   Auto-review changes who answers an eligible approval question; it does not
   grant Full access.
-- Uses the current session's latest authenticated OAuth model by default, or a
-  model selected in the plugin settings. Reasoning defaults to the lowest level
-  advertised by that model.
+- Uses the current session's latest model by default, or any OAuth/API-key
+  model selected from DSH's unified model directory. Reasoning defaults to the
+  lowest level advertised by that model.
 - Allows proven, side-effect-free local observations without an LLM round trip.
   Bounded, non-sensitive `read`, `grep`, `glob`, `lsp`, and `read_image` calls
   may target local paths outside the writable root. The conservative Bash
@@ -34,8 +34,13 @@ This project is not affiliated with or endorsed by DeepSeek or OpenAI.
   separately from user authorization. The reviewer receives bounded direct
   user requests plus the trusted DSH request-header instructions; prior tool
   output remains untrusted evidence. Transport failure,
-  malformed output, unavailable OAuth, timeout, or uncertainty falls back to
-  DSH's ordinary human approval UI.
+  malformed output, an unavailable model route, timeout, or uncertainty falls
+  back to DSH's ordinary human approval UI.
+- Reuses a model-approved exact action within the same direct user request when
+  the reviewer explicitly marks it safe to repeat. The rule includes the tool
+  name, complete arguments, and working directory; it expires on the next user
+  request, a new session, or Host restart. Shell, credentials, computer-use,
+  and externally consequential actions are never remembered.
 - Never overrides a downstream denial or DSH's monotonic tool guards.
 
 The primary gate is `tools/pre-execute`. Sandbox escalation and other late
@@ -52,8 +57,9 @@ process-external subagents, or other work outside the tool pipeline.
 
 - DeepSeek Harness `v0.1.0-rc.8`.
 - Node.js `^22.19.0` or `>=24.0.0`.
-- A working `dsh-oauth-login` installation with at least one authenticated
-  model.
+- At least one DSH LLM provider with an available model. It may be configured
+  through an API key or an OAuth plugin such as
+  [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login).
 - The unofficial [dshx devkit](https://github.com/aa2246740/dsh-external-plugin-devkit)
   for the RC8 external-client build and bounded activation workflow.
 
@@ -92,6 +98,11 @@ reviewer does not widen the sandbox, an outside-writable-root path is not
 dangerous by itself, and decisions are based on intrinsic risk plus trusted
 authorization. See OpenAI's [Auto-review documentation](https://learn.chatgpt.com/docs/sandboxing/auto-review)
 and the open-source Codex [reviewer policy template](https://github.com/openai/codex/blob/main/codex-rs/core/src/guardian/policy_template.md).
+
+DSH RC8 exposes only one-shot approval outcomes; it has no native
+`allow-always` grant store or revocation UI. This plugin therefore implements a
+conservative task-scoped exact-match rule rather than pretending a persistent
+global grant exists. Selecting **每次重新审批** disables even that local reuse.
 
 Provider-classified transport truncation is retried once by default. Each
 attempt receives its own deadline. Every failure after route resolution names

@@ -13,6 +13,7 @@ import {
   isPermissionPresetMenu,
 } from '../src/client/permission-mode-icon.ts'
 import { catastrophicReason, deterministicDecision } from '../src/policy.ts'
+import { SessionApprovalRuleStore } from '../src/approval-rules.ts'
 import {
   lowestReasoningEffort,
   ApprovalReviewer,
@@ -30,7 +31,7 @@ function execution(name: string, args: unknown, cwd = '/workspace'): ToolExecuti
     signal: new AbortController().signal,
     token: Symbol('test') as ToolExecution['token'],
     agent: {
-      session: { header: { cwd }, requestHeader: () => undefined },
+      session: { header: { cwd }, events: [], requestHeader: () => undefined },
     } as ToolExecution['agent'],
   }
 }
@@ -136,6 +137,16 @@ describe('deterministic approval boundary', () => {
     expect(deterministicDecision(execution('bash', { command }))?.decision).toBe('allow')
   })
 
+  it('fast-allows the fixed DSHX status tool and read-only knowledge commands', () => {
+    expect(deterministicDecision(execution('dshx_status', {}))?.decision).toBe('allow')
+    expect(deterministicDecision(execution('bash', {
+      command: 'dshx kb cat contracts/client-build 2>&1 | head -300',
+    }))?.decision).toBe('allow')
+    expect(deterministicDecision(execution('bash', {
+      command: 'dshx activate-new-client unsafe-plugin',
+    }))).toBeUndefined()
+  })
+
   it.each([
     'find "/Users/alice/.dsh/attachments/v1/objects" -type f -delete',
     'find "/Users/alice/.dsh/attachments/v1/objects" -type f -exec rm -f {} \\;',
@@ -149,6 +160,62 @@ describe('deterministic approval boundary', () => {
     'echo changed > /Users/alice/Documents/DSH/result.txt',
   ])('keeps a non-provably-read-only shell command behind the model gate: %s', (command) => {
     expect(deterministicDecision(execution('bash', { command }))).toBeUndefined()
+  })
+})
+
+describe('task-scoped exact approval rules', () => {
+  function requestExecution(name: string, args: unknown, text = 'update the local file'): {
+    exec: ToolExecution
+    addUserRequest: (next: string) => void
+  } {
+    const base = execution(name, args, '/workspace/project')
+    const events = [{
+      type: 'user/message',
+      data: { source: { kind: 'user' }, content: [{ type: 'text', text }] },
+    }]
+    const exec: ToolExecution = {
+      ...base,
+      agent: {
+        ...base.agent,
+        session: { ...base.agent!.session, events },
+      } as ToolExecution['agent'],
+    }
+    return {
+      exec,
+      addUserRequest: next => events.push({
+        type: 'user/message',
+        data: { source: { kind: 'user' }, content: [{ type: 'text', text: next }] },
+      }),
+    }
+  }
+
+  it('reuses only the canonical exact action under the same latest user request', () => {
+    const store = new SessionApprovalRuleStore()
+    const request = requestExecution('write', { path: 'README.md', content: 'hello' })
+    expect(store.remember(request.exec, {
+      decision: 'allow', scope: 'same-request-exact', reason: 'bounded idempotent write',
+    })).toBe(true)
+    expect(store.match({
+      ...request.exec,
+      arguments: { content: 'hello', path: 'README.md' },
+    })?.scope).toBe('same-request-exact')
+    expect(store.match({
+      ...request.exec,
+      arguments: { content: 'changed', path: 'README.md' },
+    })).toBeUndefined()
+    request.addUserRequest('publish the result')
+    expect(store.match(request.exec)).toBeUndefined()
+  })
+
+  it('never remembers shell or credential-bearing actions', () => {
+    const store = new SessionApprovalRuleStore()
+    const shell = requestExecution('bash', { command: 'npm test' }).exec
+    const credential = requestExecution('write', { path: 'config.json', apiKey: 'secret' }).exec
+    const repeated = {
+      decision: 'allow', scope: 'same-request-exact', reason: 'model proposed reuse',
+    } as const
+    expect(store.remember(shell, repeated)).toBe(false)
+    expect(store.remember(credential, repeated)).toBe(false)
   })
 })
 
@@ -267,7 +334,9 @@ describe('reviewer contracts', () => {
 
   it('accepts only the closed JSON decision vocabulary', () => {
     expect(parseReviewDecision('{"decision":"allow","reason":"in scope"}'))
-      .toEqual({ decision: 'allow', reason: 'in scope' })
+      .toEqual({ decision: 'allow', scope: 'once', reason: 'in scope' })
+    expect(parseReviewDecision('{"decision":"allow","scope":"same-request-exact","reason":"repeat safe"}'))
+      .toEqual({ decision: 'allow', scope: 'same-request-exact', reason: 'repeat safe' })
     expect(() => parseReviewDecision('{"decision":"maybe","reason":"x"}')).toThrow()
   })
 
@@ -300,10 +369,10 @@ describe('reviewer contracts', () => {
     ]
     const ctx = {
       llm: {
-        listProviders: () => [{ id: 'pi-test', name: 'Test' }],
-        listModels: async () => [{ provider: 'pi-test', id: 'model', name: 'Model' }],
+        listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek API Key' }],
+        listModels: async () => [{ provider: 'deepseek-official', id: 'model', name: 'Model' }],
         resolveModelInfo: async () => ({
-          provider: 'pi-test', id: 'model', name: 'Model',
+          provider: 'deepseek-official', id: 'model', name: 'Model',
           reasoning: { efforts: [
             { id: 'high' as never, name: 'High' },
             { id: 'minimal' as never, name: 'Minimal' },
@@ -318,7 +387,7 @@ describe('reviewer contracts', () => {
     } as unknown as Context
     const reviewer = new ApprovalReviewer(ctx, () => ({
       modelMode: 'fixed',
-      reviewerRoute: JSON.stringify(['pi-test', 'model']),
+      reviewerRoute: JSON.stringify(['deepseek-official', 'model']),
       thinkingMode: 'lowest',
       timeoutMs: 1_000,
     }))
@@ -330,7 +399,7 @@ describe('reviewer contracts', () => {
       trustedDeveloperInstructions: [],
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
-    })).resolves.toEqual({ decision: 'allow', reason: 'authorized' })
+    })).resolves.toEqual({ decision: 'allow', scope: 'once', reason: 'authorized' })
     expect(String(calls[0]?.reasoningEffort)).toBe('minimal')
     expect(calls[0]?.maxTokens).toBe(256)
     expect(calls[0]).not.toHaveProperty('tools')
@@ -373,7 +442,7 @@ describe('reviewer contracts', () => {
     expect(decision.reason).toContain("Codex error: Tool 'image_generation'")
   })
 
-  it('retries one transient OAuth stream that ends before its terminal event', async () => {
+  it('retries one transient model stream that ends before its terminal event', async () => {
     let attempts = 0
     const ctx = {
       llm: {
@@ -418,7 +487,7 @@ describe('reviewer contracts', () => {
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
     })
-    expect(decision).toEqual({ decision: 'allow', reason: 'bounded read' })
+    expect(decision).toEqual({ decision: 'allow', scope: 'once', reason: 'bounded read' })
     expect(attempts).toBe(2)
   })
 
@@ -480,7 +549,7 @@ describe('reviewer contracts', () => {
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
     })
-    expect(decision).toEqual({ decision: 'allow', reason: 'bounded read' })
+    expect(decision).toEqual({ decision: 'allow', scope: 'once', reason: 'bounded read' })
     expect(attempts).toBe(2)
   })
 

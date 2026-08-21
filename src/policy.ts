@@ -11,6 +11,7 @@ const SAFE_OBSERVATION_TOOLS = new Set([
   'cua_describe',
   'cua_list_tools',
   'cua_status',
+  'dshx_status',
   'get_goal',
   'job_list',
   'job_output',
@@ -41,6 +42,9 @@ const PARENT_PATH_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/
 
 const SAFE_METADATA_COMMANDS = new Set([
   'df', 'du', 'file', 'head', 'ls', 'pwd', 'readlink', 'realpath', 'stat', 'wc',
+])
+const SAFE_DSHX_KB_COMMANDS = new Set([
+  'cat', 'catalog', 'digest', 'lint', 'list', 'ls', 'path', 'search',
 ])
 
 const SAFE_FIND_ZERO_ARITY = new Set([
@@ -316,10 +320,19 @@ function safeEchoCommand(tokens: readonly string[]): boolean {
   return tokens[0] === 'echo'
 }
 
+function safeDshxObservation(tokens: readonly string[]): boolean {
+  if (tokens[0] !== 'dshx') return false
+  if (tokens[1] === 'status' || tokens[1] === 'which' || tokens[1] === 'help') return true
+  return tokens[1] === 'kb'
+    && tokens[2] !== undefined
+    && SAFE_DSHX_KB_COMMANDS.has(tokens[2])
+}
+
 function safeObservationCommand(tokens: readonly string[], cwd: string | undefined): boolean {
   return safeMetadataCommand(tokens, cwd)
     || safeFindCommand(tokens, cwd)
     || safeEchoCommand(tokens)
+    || safeDshxObservation(tokens)
 }
 
 function deterministicShellObservation(exec: ToolExecution): ReviewDecision | undefined {
@@ -335,7 +348,7 @@ function deterministicShellObservation(exec: ToolExecution): ReviewDecision | un
   if (commands === undefined || !commands.every(tokens => safeObservationCommand(tokens, cwd))) {
     return undefined
   }
-  return { decision: 'allow', reason: '命令链仅执行有界、无副作用的本地观察。' }
+  return { decision: 'allow', scope: 'once', reason: '命令链仅执行有界、无副作用的本地观察。' }
 }
 
 /** Match only catastrophic machine-wide operations, not ordinary exact-target cleanup. */
@@ -367,10 +380,10 @@ export function deterministicDecision(exec: ToolExecution): ReviewDecision | und
   const shellObservation = deterministicShellObservation(exec)
   if (shellObservation !== undefined) return shellObservation
   if (SAFE_OBSERVATION_TOOLS.has(exec.name)) {
-    return { decision: 'allow', reason: '只读或询问型 DSH 操作。' }
+    return { decision: 'allow', scope: 'once', reason: '只读或询问型 DSH 操作。' }
   }
   if (SAFE_SESSION_WRITES.has(exec.name)) {
-    return { decision: 'allow', reason: '仅更新当前 DSH 会话内的计划状态。' }
+    return { decision: 'allow', scope: 'once', reason: '仅更新当前 DSH 会话内的计划状态。' }
   }
   if (!WORKSPACE_READ_TOOLS.has(exec.name)) return undefined
 
@@ -378,10 +391,10 @@ export function deterministicDecision(exec: ToolExecution): ReviewDecision | und
   const paths = candidatePaths(exec.arguments)
   // glob/grep/lsp default to the session cwd when no explicit root is supplied.
   if (paths.length === 0 && exec.name !== 'read' && exec.name !== 'read_image') {
-    return { decision: 'allow', reason: '在当前工作区内执行只读查询。' }
+    return { decision: 'allow', scope: 'once', reason: '在当前工作区内执行只读查询。' }
   }
   if (paths.length > 0 && paths.every(path => safeObservationPath(path, cwd))) {
-    return { decision: 'allow', reason: '读取目标有界且不命中敏感路径。' }
+    return { decision: 'allow', scope: 'once', reason: '读取目标有界且不命中敏感路径。' }
   }
   return undefined
 }
