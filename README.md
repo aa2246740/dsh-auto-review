@@ -1,72 +1,44 @@
-# DSH Auto Review
+中文 | [English](README.en.md)
 
-An unofficial external plugin that adds a Codex-style **Approve for me** mode to
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It keeps
-the official workspace sandbox in place and delegates eligible approval
-questions to a model registered in DSH's unified LLM directory. Both OAuth
-models and API-key configured providers are supported.
+# 替我审批
 
-> Project: `dsh-auto-review` · plugin ID: `dsh-approve-for-me` · permission
-> preset: `approve-for-me`. The plugin ID is intentionally retained for
-> compatibility with existing installations.
+DeepSeek Harness 跑工具前会停下来问你。这个插件在权限菜单里加了一档 **Approve for me**：沙箱还是 Workspace Write，但能证明安全的观察不再弹窗，整盘删除当场拒绝，其余交给你已经在 DSH 里配好的模型。模型失败、超时或不敢判，就还是问你。
 
-This project is not affiliated with or endorsed by DeepSeek or OpenAI.
+它不是把「完全访问」换了个皮。
 
-## What it does
+仓库叫 `dsh-auto-review`，插件 ID 仍是 `dsh-approve-for-me`，已经装过的不用改名。
 
-- Adds a real DSH permission preset named **Approve for me**. It is not a visual
-  switch layered over an official mode.
-- Keeps DSH's official `workspace-write` sandbox and `ask` approval policy.
-  Auto-review changes who answers an eligible approval question; it does not
-  grant Full access.
-- Uses the current session's latest model by default, or any OAuth/API-key
-  model selected from DSH's unified model directory. Reasoning defaults to the
-  lowest level advertised by that model.
-- Allows proven, side-effect-free local observations without an LLM round trip.
-  Bounded, non-sensitive `read`, `grep`, `glob`, `lsp`, and `read_image` calls
-  may target local paths outside the writable root. The conservative Bash
-  parser recognizes metadata commands such as `pwd`, `ls`, `head`, `stat`,
-  `file`, `readlink`, `realpath`, `df`, `du`, `wc`, and a bounded `find` subset.
-  It also proves sequences made only from those commands, stdout pipes, and the
-  non-writing `2>&1` descriptor merge.
-- Rejects catastrophic machine-wide deletion deterministically.
-- Sends other eligible actions to a reviewer that classifies intrinsic risk
-  separately from user authorization. The reviewer receives bounded direct
-  user requests plus the trusted DSH request-header instructions; prior tool
-  output remains untrusted evidence. Transport failure,
-  malformed output, an unavailable model route, timeout, or uncertainty falls
-  back to DSH's ordinary human approval UI.
-- Reuses a model-approved exact action within the same direct user request when
-  the reviewer explicitly marks it safe to repeat. The rule includes the tool
-  name, complete arguments, and working directory; it expires on the next user
-  request, a new session, or Host restart. Shell, credentials, computer-use,
-  and externally consequential actions are never remembered.
-- Never overrides a downstream denial or DSH's monotonic tool guards.
+下面的图都来自官方 DeepSeek Harness Web（RC8 本地构建），插件已加载，输入框选中 **Approve for me**。
 
-The primary gate is `tools/pre-execute`. Sandbox escalation and other late
-permission questions are correlated through `approval/request`.
+![替我审批设置卡](docs/screenshots/settings-card.png)
 
-## Coverage boundary
+输入框里选中 **Approve for me** 之后，插件会给这一档补上自己的盾牌星标。另外三种官方模式它不管。
 
-The plugin covers registered tools, Code Mode sub-dispatches, and registered
-MCP tools that pass through DSH's tool runtime. It does not intercept slash
-commands, static plugin background work, Creator activation or Host RPC,
-process-external subagents, or other work outside the tool pipeline.
+![Approve for me 权限菜单](docs/screenshots/permission-menu.png)
 
-## Requirements
+`pwd && ls` 直接跑完，没有普通审批条。
 
-- DeepSeek Harness `v0.1.0-rc.8`.
-- Node.js `^22.19.0` or `>=24.0.0`.
-- At least one DSH LLM provider with an available model. It may be configured
-  through an API key or an OAuth plugin such as
-  [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login).
-- The unofficial [dshx devkit](https://github.com/aa2246740/dsh-external-plugin-devkit)
-  for the RC8 external-client build and bounded activation workflow.
+![从放到拒](docs/screenshots/review-loop.gif)
 
-## Install on RC8
+**放行** — 有界、没副作用的本地观察。官方会话里 `pwd && ls` 出了工作区列表，中间没有 Allow once。
 
-Run these commands from a DeepSeek Harness checkout. Keep the destination name
-`dsh-approve-for-me`, because it is the stable plugin ID:
+![放行](docs/screenshots/allow.png)
+
+**先问模型** — 快速通道证明不了，比如读 `.env`。界面停在官方的 Deep diving / 普通审批；模型也不敢判就还是问你。
+
+![先问模型](docs/screenshots/pending.png)
+
+**拒绝** — `rm -rf /` 到不了审批模型。工具行是官方的失败态：`拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
+
+![拒绝](docs/screenshots/deny.png)
+
+超时、重试、最大输出这些藏在设置卡底部。
+
+![安全边界与高级参数](docs/screenshots/settings-advanced.png)
+
+## 装上
+
+在 DeepSeek Harness 仓库里执行。目录名必须是 `dsh-approve-for-me`：
 
 ```sh
 git clone https://github.com/aa2246740/dsh-auto-review.git my-plugins/dsh-approve-for-me
@@ -74,49 +46,26 @@ pnpm --dir my-plugins/dsh-approve-for-me install --ignore-workspace
 pnpm --dir my-plugins/dsh-approve-for-me build
 dshx check dsh-approve-for-me
 dshx activation-plan dsh-approve-for-me --change new-client
-dshx activate-new-client dsh-approve-for-me --profile web --port <current-web-port>
+dshx activate-new-client dsh-approve-for-me --profile web --port <当前 Web 端口>
 ```
 
-After `activate-new-client` reports both `HOST_TREE_ACTIVE` and
-`CLIENT_MANIFEST_PRESENT`, reload or reopen the WebUI once. Select **Approve for
-me** from the composer permission menu, then choose the reviewer model in the
-plugin settings.
+`activate-new-client` 打出 `HOST_TREE_ACTIVE` 和 `CLIENT_MANIFEST_PRESENT` 之后，刷新一次 WebUI。输入框权限菜单选 **Approve for me**，再到插件设置里选审批模型。
 
-Do not also mount the plugin manually through another bundle or patch. A second
-mount creates a duplicate Loader ID instead of a second safety layer.
+需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`、Node `^22.19.0` 或 `>=24`、至少一条已经能用的 DSH 模型（API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login)），以及 [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit)。
 
-## Safety model
+不要再用另一份 bundle 或 patch 挂一次。重复挂载只会多出一个 Loader，不会多一层安全。
 
-The fast path is an allowlist, not a shell denylist. It accepts `;` and `|` only
-when every segment is independently proven read-only, and accepts only the
-non-writing `2>&1` redirect. Substitutions, expansions, output redirects,
-writes, sensitive paths, broad roots, background commands, malformed quoting,
-and anything the parser cannot prove safe go to review.
+## 它怎么判
 
-The reviewer policy follows the public Codex Auto-review design: swapping the
-reviewer does not widen the sandbox, an outside-writable-root path is not
-dangerous by itself, and decisions are based on intrinsic risk plus trusted
-authorization. See OpenAI's [Auto-review documentation](https://learn.chatgpt.com/docs/sandboxing/auto-review)
-and the open-source Codex [reviewer policy template](https://github.com/openai/codex/blob/main/codex-rs/core/src/guardian/policy_template.md).
+先走白名单，不靠「看起来不像危险命令」。`ls`、`pwd`、有界的 `find`、工作区内的 `read` / `grep` / `glob` 可以直接过。`rm -rf /`、抹盘、fork bomb 在本地拒绝。读 `.env`、写入、其余说不清的，交给你选的模型。
 
-DSH RC8 exposes only one-shot approval outcomes; it has no native
-`allow-always` grant store or revocation UI. This plugin therefore implements a
-conservative task-scoped exact-match rule rather than pretending a persistent
-global grant exists. Selecting **每次重新审批** disables even that local reuse.
+模型只看到有界的用户原话和 DSH 请求头；之前的工具输出不当成授权。它明确说「这次任务里同样的操作可以再来」时，同一条用户消息内才会复用。换一句、换会话、重启 Host 就作废。选「每次重新审批」连这点也关。
 
-Provider-classified transport truncation is retried once by default. Each
-attempt receives its own deadline. Every failure after route resolution names
-the requested provider and model before preserving the adapter's original
-error, so a protocol-specific error cannot be mistaken for a route switch.
+超时、传输出错、输出不像决定、路由不在，一律退回人工审批。斜杠命令、后台任务、Host RPC、流水线外面的子代理，它不管。报告漏洞见 [SECURITY.md](SECURITY.md)。
 
-See [SECURITY.md](SECURITY.md) for reporting and trust-boundary details.
+## 改代码
 
-## Develop
-
-The repository must be placed at `my-plugins/dsh-approve-for-me` inside an RC8
-Harness checkout because its TypeScript and external-client build configuration
-intentionally reuse that checkout's official packages plus dshx's
-`externalClientBundle` adapter.
+这个仓库要放在 RC8 检出的 `my-plugins/dsh-approve-for-me`，构建会用到那边的官方包和 dshx 的 `externalClientBundle`。
 
 ```sh
 pnpm install --ignore-workspace
@@ -126,9 +75,8 @@ pnpm run build
 dshx check dsh-approve-for-me
 ```
 
-The build must produce a lazy-CJS `lib/client.js` handoff. Passing the source
-tests alone does not prove live activation or browser behavior.
+测过源码不等于浏览器里已经生效。构建必须产出 lazy-CJS 的 `lib/client.js`。
 
-## License
+## 许可
 
-[MIT](LICENSE)
+[MIT](LICENSE)。跟 DeepSeek、OpenAI 都没有隶属关系。
