@@ -8,10 +8,10 @@ the maintainer through the GitHub account `aa2246740`.
 
 Include the affected commit, DSH version, plugin configuration, tool name and
 arguments after removing secrets, the observed decision, and the expected
-decision. A minimal reproduction is especially useful for parser or approval
-correlation bugs.
+decision. A minimal reproduction is especially useful for parser, approval
+correlation, or denial-circuit-breaker bugs.
 
-## Trust boundary
+## Trust model
 
 DSH Auto Review is an approval reviewer, not a sandbox. DeepSeek Harness remains
 responsible for filesystem, network, process, and tool enforcement. The plugin
@@ -23,10 +23,28 @@ Only registered tool calls that enter DSH's tool runtime are covered. Slash
 commands, Host RPC, Creator activation, background plugin work, external
 processes, and other pipeline-external actions require separate controls.
 
-The OAuth provider is trusted to review bounded request context. Credentials
-remain owned by `dsh-oauth-login`; this plugin reads its same-origin status API
-and never reads OAuth credential files from the browser.
-
 Direct user requests and DSH request-header developer instructions are trusted
-authorization context. Tool arguments, prior tool results, and quoted content
-are untrusted evidence and cannot expand task scope by themselves.
+authorization context. A successful `ask_user_question` response is trusted only
+as an answer to its recorded, untrusted question; it cannot authorize a different
+or more general action. Assistant messages, tool arguments, other tool results,
+paths, URLs, commands, skills, and plugin text are untrusted evidence. They may
+resolve a bounded target for an authorized task but cannot expand authority by
+themselves, unless the user explicitly authorizes following that specific
+content.
+
+The reviewer receives a redacted, size-bounded prompt and no tools. A fixed
+reviewer route may cross providers, so credential-shaped fields and inline
+secrets are removed before the request. Credentials remain owned by the
+configured DSH provider; the browser half reads only the unified model catalog.
+Prior reviewer messages are reused only while the parent agent's trusted-
+authorization version is unchanged.
+
+While **Approve for me** is active, covered approval requests do not fall through
+to the human answerer. Missing correlation, unavailable models, timeout,
+transport exhaustion, malformed output, and other reviewer failures reject the
+request. Parent cancellation remains cancellation rather than a denial.
+
+Reviewer allows are one-shot. The plugin does not create persistent rules or
+model-owned "allow always" grants. Repeated explicit denials stop the current
+turn after three consecutive denials or ten denials in the last fifty reviews
+under the same direct user request.

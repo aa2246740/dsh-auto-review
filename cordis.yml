@@ -13,7 +13,7 @@
         sandbox: workspace-write
         approval: ask
         name: Approve for me
-        description: Keep workspace confinement and delegate approval questions to the configured OAuth reviewer.
+        description: Keep workspace confinement and route real approval requests to an automatic reviewer that fails closed.
       danger-full-access:
         sandbox: danger-full-access
         approval: never

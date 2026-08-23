@@ -2,43 +2,45 @@
 
 # 替我审批
 
-DeepSeek Harness 跑工具前会停下来问你。这个插件在权限菜单里加了一档 **Approve for me**：沙箱还是 Workspace Write，但能证明安全的观察不再弹窗，整盘删除当场拒绝，其余交给你已经在 DSH 里配好的模型。模型失败、超时或不敢判，就还是问你。
+DeepSeek Harness 跑工具前会按权限策略决定是否询问。这个插件在权限菜单里增加一档 **Approve for me**：沙箱仍是 Workspace Write，已经被 DSH 直接放行的调用不会送审，真正需要审批的调用交给你在 DSH 中指定的独立审批模型。
+
+能严格证明安全的本地观察可以快速放行，整盘删除等灾难性操作在本地拒绝；模型不可用、超时、输出不合规或缺少原始调用上下文时一律失败关闭，不再退回人工审批。
 
 它不是把「完全访问」换了个皮。
 
-仓库叫 `dsh-auto-review`，插件 ID 仍是 `dsh-approve-for-me`，已经装过的不用改名。
+仓库名是 `dsh-auto-review`，插件 ID 仍是 `dsh-approve-for-me`，已有安装不用改名。
 
-下面的图都来自官方 DeepSeek Harness Web（RC8 本地构建），插件已加载，输入框选中 **Approve for me**。
+下面的图片来自官方 DeepSeek Harness Web（RC8 本地构建）。
 
 ![替我审批设置卡](docs/screenshots/settings-card.png)
 
-输入框里选中 **Approve for me** 之后，插件会给这一档补上自己的盾牌星标。另外三种官方模式它不管。
+输入框选中 **Approve for me** 后，插件只给这一档补上盾牌星标，另外三种官方模式保持不变。
 
 ![Approve for me 权限菜单](docs/screenshots/permission-menu.png)
 
-`pwd && ls` 直接跑完，没有普通审批条。
+`pwd && ls` 这类经过证明的只读观察可以直接完成，不出现普通审批条。
 
-![从放到拒](docs/screenshots/review-loop.gif)
+![从放行到拒绝](docs/screenshots/review-loop.gif)
 
-**放行** — 有界、没副作用的本地观察。官方会话里 `pwd && ls` 出了工作区列表，中间没有 Allow once。
+**快速放行** — 有界、无副作用的本地观察。
 
 ![放行](docs/screenshots/allow.png)
 
-**先问模型** — 快速通道证明不了，比如读 `.env`。界面停在官方的 Deep diving / 普通审批；模型也不敢判就还是问你。
+**模型审核** — 快速通道无法证明的真实审批请求，例如敏感读取或写入，会交给独立审批模型。模型必须返回结构化的风险、授权、结论和理由；不能安全完成审核时直接拒绝。
 
-![先问模型](docs/screenshots/pending.png)
+![模型审核中](docs/screenshots/pending.png)
 
-**拒绝** — `rm -rf /` 到不了审批模型。工具行是官方的失败态：`拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
+**本地拒绝** — `rm -rf /` 不会进入审批模型。工具行直接显示失败态：`拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
 
 ![拒绝](docs/screenshots/deny.png)
 
-超时、重试、最大输出这些藏在设置卡底部。
+90 秒总期限、三次总尝试和输出上限位于设置卡底部。
 
 ![安全边界与高级参数](docs/screenshots/settings-advanced.png)
 
-## 装上
+## 安装
 
-在 DeepSeek Harness 仓库里执行。目录名必须是 `dsh-approve-for-me`：
+在 DeepSeek Harness 仓库中执行。目录名必须保持为 `dsh-approve-for-me`：
 
 ```sh
 git clone https://github.com/aa2246740/dsh-auto-review.git my-plugins/dsh-approve-for-me
@@ -49,23 +51,33 @@ dshx activation-plan dsh-approve-for-me --change new-client
 dshx activate-new-client dsh-approve-for-me --profile web --port <当前 Web 端口>
 ```
 
-`activate-new-client` 打出 `HOST_TREE_ACTIVE` 和 `CLIENT_MANIFEST_PRESENT` 之后，刷新一次 WebUI。输入框权限菜单选 **Approve for me**，再到插件设置里选审批模型。
+`activate-new-client` 输出 `HOST_TREE_ACTIVE` 和 `CLIENT_MANIFEST_PRESENT` 后刷新一次 WebUI。在输入框权限菜单选择 **Approve for me**，再到插件设置中选择审批模型。
 
-需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`、Node `^22.19.0` 或 `>=24`、至少一条已经能用的 DSH 模型（API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login)），以及 [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit)。
+需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`、Node `^22.19.0` 或 `>=24`、至少一个可用的 DSH 模型（API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login)），以及 [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit)。
 
-不要再用另一份 bundle 或 patch 挂一次。重复挂载只会多出一个 Loader，不会多一层安全。
+不要再通过另一份 bundle 或 patch 重复挂载。重复挂载只会产生第二个 Loader ID，不会增加第二层安全保护。
 
 ## 它怎么判
 
-先走白名单，不靠「看起来不像危险命令」。`ls`、`pwd`、有界的 `find`、工作区内的 `read` / `grep` / `glob` 可以直接过。`rm -rf /`、抹盘、fork bomb 在本地拒绝。读 `.env`、写入、其余说不清的，交给你选的模型。
+- 保留 DSH 的 `workspace-write` 沙箱和 `ask` 审批策略，不授予 Full access。
+- 只审核 DSH 原本会询问的真实审批请求；已经被下游策略允许或拒绝的调用不会被改写。
+- 可以跟随当前 Agent 模型，也可以固定使用独立 OAuth/API-key 模型；模型支持时请求 `low` reasoning。
+- 快速通道采用允许列表，不依赖字符串黑名单。`pwd`、`ls`、有界 `find`、非敏感 `read` / `grep` / `glob` 等可以在被严格证明安全时直接通过。
+- 审批模型必须返回 Codex 风格的 `risk_level`、`user_authorization`、`outcome` 和 `rationale`。Critical 风险不能放行；High 风险必须有足够明确的用户授权。
+- 直接用户消息、DSH 请求头中的开发者/`AGENTS.md` 指令是可信授权。`ask_user_question` 的回答只对它所绑定的原问题有效；助手消息和其他工具结果只是证据，不能自行扩大权限。
+- 每次审批独立生效。模型不能创建任务级或永久的“始终允许”规则；重试和权限升级会重新审核。
+- 审批模型会复用有界会话，但只有在父 Agent、模型路由、策略版本和可信授权版本一致时才复用；并发审核使用空历史临时分支。
+- 总期限默认 90 秒，传输或格式故障最多额外重试两次，并共享同一个期限。
+- 同一条直接用户请求下连续拒绝 3 次，或最近 50 次审核中拒绝 10 次，会停止当前轮次。
+- 缺少调用关联、模型不可用、超时、传输耗尽、格式错误等全部失败关闭；父任务取消仍保持取消语义。
 
-模型只看到有界的用户原话和 DSH 请求头；之前的工具输出不当成授权。它明确说「这次任务里同样的操作可以再来」时，同一条用户消息内才会复用。换一句、换会话、重启 Host 就作废。选「每次重新审批」连这点也关。
+插件覆盖注册工具、Code Mode 子调用以及经过 DSH 工具运行时的 MCP 工具。斜杠命令、后台插件任务、Creator 激活、Host RPC 和进程外子代理不在覆盖范围内。
 
-超时、传输出错、输出不像决定、路由不在，一律退回人工审批。斜杠命令、后台任务、Host RPC、流水线外面的子代理，它不管。报告漏洞见 [SECURITY.md](SECURITY.md)。
+安全边界见 [SECURITY.md](SECURITY.md)。Codex 官方实现和本插件的逐项审计见 [`docs/codex-auto-review-reference-2026-08-23.md`](docs/codex-auto-review-reference-2026-08-23.md)。
 
-## 改代码
+## 开发
 
-这个仓库要放在 RC8 检出的 `my-plugins/dsh-approve-for-me`，构建会用到那边的官方包和 dshx 的 `externalClientBundle`。
+仓库需要放在 RC8 检出的 `my-plugins/dsh-approve-for-me` 下，构建会复用该检出中的官方包以及 dshx 的 `externalClientBundle`。
 
 ```sh
 pnpm install --ignore-workspace
@@ -75,8 +87,8 @@ pnpm run build
 dshx check dsh-approve-for-me
 ```
 
-测过源码不等于浏览器里已经生效。构建必须产出 lazy-CJS 的 `lib/client.js`。
+源码测试通过不代表浏览器已加载。构建必须生成 lazy-CJS 的 `lib/client.js`，并按 `dshx activation-plan` 给出的生命周期分支完成激活和真实 GUI 验证。
 
 ## 许可
 
-[MIT](LICENSE)。跟 DeepSeek、OpenAI 都没有隶属关系。
+[MIT](LICENSE)。本项目与 DeepSeek、OpenAI 均无隶属或背书关系。

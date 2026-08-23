@@ -13,13 +13,16 @@ import {
   isPermissionPresetMenu,
 } from '../src/client/permission-mode-icon.ts'
 import { catastrophicReason, deterministicDecision } from '../src/policy.ts'
-import { SessionApprovalRuleStore } from '../src/approval-rules.ts'
+import { AutoReviewCoordinator } from '../src/coordinator.ts'
+import { ReviewSessionManager } from '../src/review-session.ts'
 import {
-  lowestReasoningEffort,
+  preferredLowReasoningEffort,
   ApprovalReviewer,
   parseReviewDecision,
   parseReviewerRoute,
   redactArguments,
+  type ReviewDecision,
+  type ReviewSubject,
 } from '../src/reviewer.ts'
 
 function execution(name: string, args: unknown, cwd = '/workspace'): ToolExecution {
@@ -163,59 +166,207 @@ describe('deterministic approval boundary', () => {
   })
 })
 
-describe('task-scoped exact approval rules', () => {
-  function requestExecution(name: string, args: unknown, text = 'update the local file'): {
-    exec: ToolExecution
-    addUserRequest: (next: string) => void
+describe('auto-review coordinator', () => {
+  const allowDecision = {
+    source: 'model',
+    decision: 'allow',
+    riskLevel: 'low',
+    userAuthorization: 'unknown',
+    reason: 'bounded action',
+  } satisfies ReviewDecision
+  const denyDecision = {
+    source: 'model',
+    decision: 'deny',
+    riskLevel: 'high',
+    userAuthorization: 'low',
+    reason: 'risky side effect lacks authorization',
+  } satisfies ReviewDecision
+
+  function agentHarness(): {
+    agent: NonNullable<ToolExecution['agent']>
+    injections: string[]
+    cancellations: string[]
   } {
-    const base = execution(name, args, '/workspace/project')
-    const events = [{
-      type: 'user/message',
-      data: { source: { kind: 'user' }, content: [{ type: 'text', text }] },
-    }]
-    const exec: ToolExecution = {
-      ...base,
-      agent: {
-        ...base.agent,
-        session: { ...base.agent!.session, events },
-      } as ToolExecution['agent'],
-    }
+    const base = execution('write', { path: 'README.md', content: 'hello' }, '/workspace/project')
+    const injections: string[] = []
+    const cancellations: string[] = []
+    const agent = {
+      ...base.agent!,
+      session: {
+        ...base.agent!.session,
+        events: [{
+          type: 'user/message',
+          data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'update the local file' }] },
+        }],
+      },
+      inject: () => { injections.push('injected') },
+      cancel: (cause: { reason?: string }) => { cancellations.push(cause.reason ?? '') },
+    } as NonNullable<ToolExecution['agent']>
+    return { agent, injections, cancellations }
+  }
+
+  function coordinatorHarness(decisions: ReviewDecision[]): {
+    coordinator: AutoReviewCoordinator
+    reviewed: ReviewSubject[]
+  } {
+    const reviewed: ReviewSubject[] = []
+    const reviewer = {
+      subject(exec: ToolExecution, downstream: ReviewSubject['downstream']): ReviewSubject {
+        return {
+          stage: 'pre-execute',
+          toolName: exec.name,
+          arguments: exec.arguments,
+          ...exec.agent === undefined ? {} : { agent: exec.agent },
+          recentUserRequests: [],
+          trustedDeveloperInstructions: [],
+          trustedUserResponses: [],
+          recentAssistantMessages: [],
+          recentExecutionEvidence: [],
+          downstream,
+        }
+      },
+      async review(subject: ReviewSubject): Promise<ReviewDecision> {
+        reviewed.push(subject)
+        const decision = decisions.shift()
+        if (decision === undefined) throw new Error('unexpected reviewer call')
+        return decision
+      },
+      log: () => {},
+    } satisfies Pick<ApprovalReviewer, 'subject' | 'review' | 'log'>
     return {
-      exec,
-      addUserRequest: next => events.push({
-        type: 'user/message',
-        data: { source: { kind: 'user' }, content: [{ type: 'text', text: next }] },
-      }),
+      coordinator: new AutoReviewCoordinator(reviewer, () => true),
+      reviewed,
     }
   }
 
-  it('reuses only the canonical exact action under the same latest user request', () => {
-    const store = new SessionApprovalRuleStore()
-    const request = requestExecution('write', { path: 'README.md', content: 'hello' })
-    expect(store.remember(request.exec, {
-      decision: 'allow', scope: 'same-request-exact', reason: 'bounded idempotent write',
-    })).toBe(true)
-    expect(store.match({
-      ...request.exec,
-      arguments: { content: 'hello', path: 'README.md' },
-    })?.scope).toBe('same-request-exact')
-    expect(store.match({
-      ...request.exec,
-      arguments: { content: 'changed', path: 'README.md' },
-    })).toBeUndefined()
-    request.addUserRequest('publish the result')
-    expect(store.match(request.exec)).toBeUndefined()
+  it('reviews only calls that DSH would otherwise ask to approve', async () => {
+    const { agent } = agentHarness()
+    const { coordinator, reviewed } = coordinatorHarness([allowDecision])
+    const exec = { ...execution('write', { path: 'README.md', content: 'hello' }), agent }
+
+    await expect(coordinator.preExecute(exec, { kind: 'allow' })).resolves.toEqual({ kind: 'allow' })
+    expect(reviewed).toHaveLength(0)
+    await expect(coordinator.preExecute(exec, { kind: 'ask', reason: 'needs approval' }))
+      .resolves.toEqual({ kind: 'allow' })
+    expect(reviewed).toHaveLength(1)
   })
 
-  it('never remembers shell or credential-bearing actions', () => {
-    const store = new SessionApprovalRuleStore()
-    const shell = requestExecution('bash', { command: 'npm test' }).exec
-    const credential = requestExecution('write', { path: 'config.json', apiKey: 'secret' }).exec
-    const repeated = {
-      decision: 'allow', scope: 'same-request-exact', reason: 'model proposed reuse',
-    } as const
-    expect(store.remember(shell, repeated)).toBe(false)
-    expect(store.remember(credential, repeated)).toBe(false)
+  it('owns late approval requests and does not fall through to the human answerer', async () => {
+    const { agent, injections } = agentHarness()
+    const { coordinator, reviewed } = coordinatorHarness([allowDecision, denyDecision])
+    const exec = { ...execution('write', { path: '/outside/file', content: 'hello' }), agent }
+    await expect(coordinator.preExecute(exec, { kind: 'ask', reason: 'policy approval' }))
+      .resolves.toEqual({ kind: 'allow' })
+    let delegated = 0
+
+    await expect(coordinator.approvalRequest({
+      agent,
+      toolName: exec.name,
+      callId: exec.callId,
+      reason: 'escalate sandbox to danger-full-access',
+    }, () => {
+      delegated += 1
+      return Promise.resolve('allowed-once')
+    })).resolves.toBe('rejected')
+
+    expect(delegated).toBe(0)
+    expect(reviewed.map(subject => subject.stage)).toEqual(['pre-execute', 'approval-request'])
+    expect(reviewed[1]?.approvalReason).toContain('danger-full-access')
+    expect(injections).toHaveLength(1)
+  })
+
+  it('forces model review for an escalation even when the original action is deterministically safe', async () => {
+    const { agent } = agentHarness()
+    const { coordinator, reviewed } = coordinatorHarness([denyDecision])
+    const exec = {
+      ...execution('read', { file_path: '/workspace/project/README.md', limit: 80 }, '/workspace/project'),
+      agent,
+    }
+
+    await expect(coordinator.preExecute(exec, { kind: 'ask', reason: 'outside default policy' }))
+      .resolves.toEqual({ kind: 'allow' })
+    expect(reviewed).toHaveLength(0)
+
+    await expect(coordinator.approvalRequest({
+      agent,
+      toolName: exec.name,
+      callId: exec.callId,
+      reason: 'retry with danger-full-access',
+    }, () => Promise.resolve('allowed-once'))).resolves.toBe('rejected')
+    expect(reviewed).toHaveLength(1)
+    expect(reviewed[0]?.approvalReason).toContain('danger-full-access')
+  })
+
+  it('returns cancellation when a live approval review is aborted', async () => {
+    const { agent } = agentHarness()
+    const reviewer = {
+      subject(exec: ToolExecution, downstream: ReviewSubject['downstream']): ReviewSubject {
+        return {
+          stage: 'pre-execute',
+          toolName: exec.name,
+          arguments: exec.arguments,
+          ...exec.agent === undefined ? {} : { agent: exec.agent },
+          recentUserRequests: [],
+          trustedDeveloperInstructions: [],
+          trustedUserResponses: [],
+          recentAssistantMessages: [],
+          recentExecutionEvidence: [],
+          downstream,
+        }
+      },
+      review: (_subject: ReviewSubject, signal?: AbortSignal): Promise<ReviewDecision> => new Promise((_, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })
+      }),
+      log: () => {},
+    } satisfies Pick<ApprovalReviewer, 'subject' | 'review' | 'log'>
+    const coordinator = new AutoReviewCoordinator(reviewer, () => true)
+    const exec = { ...execution('write', { path: '/outside/file', content: 'hello' }), agent }
+    await coordinator.preExecute(exec, { kind: 'allow' })
+    const controller = new AbortController()
+    const outcome = coordinator.approvalRequest({
+      agent,
+      toolName: exec.name,
+      callId: exec.callId,
+      signal: controller.signal,
+    }, () => Promise.resolve('allowed-once'))
+    controller.abort()
+    await expect(outcome).resolves.toBe('cancelled')
+  })
+
+  it('fails closed when an approval request has no correlated tool call', async () => {
+    const { agent, injections } = agentHarness()
+    const { coordinator, reviewed } = coordinatorHarness([])
+    let delegated = 0
+
+    await expect(coordinator.approvalRequest({
+      agent,
+      toolName: 'background-operation',
+      reason: 'needs approval',
+    }, () => {
+      delegated += 1
+      return Promise.resolve('allowed-once')
+    })).resolves.toBe('rejected')
+
+    expect(delegated).toBe(0)
+    expect(reviewed).toHaveLength(0)
+    expect(injections).toHaveLength(1)
+  })
+
+  it('stops the turn after three consecutive explicit reviewer denials', async () => {
+    const { agent, cancellations } = agentHarness()
+    const { coordinator } = coordinatorHarness([denyDecision, denyDecision, denyDecision])
+    for (let index = 0; index < 3; index += 1) {
+      const callId = CallId(`deny-${String(index)}`)
+      const exec = {
+        ...execution('write', { path: `file-${String(index)}.txt`, content: 'x' }),
+        callId,
+        rootCallId: callId,
+        agent,
+      }
+      await expect(coordinator.preExecute(exec, { kind: 'ask', reason: 'needs approval' }))
+        .resolves.toMatchObject({ kind: 'deny' })
+    }
+    expect(cancellations).toHaveLength(1)
   })
 })
 
@@ -254,6 +405,7 @@ describe('reviewer contracts', () => {
       limit: 80,
     }, '/Users/alice/work/DSH')
     const callId = CallId('foreign-session-call')
+    const questionCallId = CallId('user-question-call')
     const agent = {
       ...base.agent,
       session: {
@@ -264,6 +416,14 @@ describe('reviewer contracts', () => {
             data: {
               content: [{ type: 'text', text: '/resume-codex 01a01e7e-9c42-7260-ab9b-41149f1e5533' }],
               source: { kind: 'user' },
+            },
+          },
+          {
+            type: 'assistant/message',
+            data: {
+              message: {
+                content: [{ type: 'text', text: 'I will inspect the resumed workspace output.' }],
+              },
             },
           },
           {
@@ -290,6 +450,27 @@ describe('reviewer contracts', () => {
               },
             },
           },
+          {
+            type: 'tool/call',
+            data: {
+              callId: questionCallId,
+              name: 'ask_user_question',
+              arguments: '{"questions":[{"id":"confirm","question":"Publish the build?"}]}',
+            },
+          },
+          {
+            type: 'tool/result',
+            data: {
+              message: {
+                source: { kind: 'tool', callId: questionCallId },
+                content: [{
+                  type: 'tool-result',
+                  toolCallId: questionCallId,
+                  content: [{ type: 'text', text: '{"confirm":"Yes, publish this build."}' }],
+                }],
+              },
+            },
+          },
         ],
       },
     } as ToolExecution['agent']
@@ -300,6 +481,12 @@ describe('reviewer contracts', () => {
     expect(JSON.stringify(subject.recentExecutionEvidence)).toContain(
       '/Users/alice/work/project',
     )
+    expect(subject.recentAssistantMessages).toEqual([
+      'I will inspect the resumed workspace output.',
+    ])
+    expect(JSON.stringify(subject.trustedUserResponses[0]?.question)).toContain('Publish the build?')
+    expect(JSON.stringify(subject.trustedUserResponses[0]?.response)).toContain('Yes, publish this build.')
+    expect(JSON.stringify(subject.recentExecutionEvidence)).not.toContain('ask_user_question')
   })
 
   it('frames the request header as trusted developer instructions', () => {
@@ -332,12 +519,27 @@ describe('reviewer contracts', () => {
     expect(parseReviewerRoute('{bad')).toBeUndefined()
   })
 
-  it('accepts only the closed JSON decision vocabulary', () => {
-    expect(parseReviewDecision('{"decision":"allow","reason":"in scope"}'))
-      .toEqual({ decision: 'allow', scope: 'once', reason: 'in scope' })
-    expect(parseReviewDecision('{"decision":"allow","scope":"same-request-exact","reason":"repeat safe"}'))
-      .toEqual({ decision: 'allow', scope: 'same-request-exact', reason: 'repeat safe' })
-    expect(() => parseReviewDecision('{"decision":"maybe","reason":"x"}')).toThrow()
+  it('accepts Codex Guardian assessments and rejects inconsistent allows', () => {
+    expect(parseReviewDecision('{"outcome":"allow"}')).toEqual({
+      source: 'model',
+      decision: 'allow',
+      riskLevel: 'low',
+      userAuthorization: 'unknown',
+      reason: 'Auto-review returned a low-risk allow decision.',
+    })
+    expect(parseReviewDecision('{"risk_level":"high","user_authorization":"medium","outcome":"allow","rationale":"narrow authorized deployment"}'))
+      .toMatchObject({
+        source: 'model',
+        decision: 'allow',
+        riskLevel: 'high',
+        userAuthorization: 'medium',
+        reason: 'narrow authorized deployment',
+      })
+    expect(parseReviewDecision('{"risk_level":"high","outcome":"deny","rationale":"authorization missing"}'))
+      .toMatchObject({ decision: 'deny', riskLevel: 'high', reason: 'authorization missing' })
+    expect(() => parseReviewDecision('{"decision":"ask","reason":"x"}')).toThrow()
+    expect(() => parseReviewDecision('{"risk_level":"critical","user_authorization":"high","outcome":"allow"}')).toThrow()
+    expect(() => parseReviewDecision('{"risk_level":"high","user_authorization":"unknown","outcome":"allow"}')).toThrow()
   })
 
   it('redacts credential-shaped fields recursively', () => {
@@ -345,8 +547,8 @@ describe('reviewer contracts', () => {
       .toEqual({ apiKey: '[REDACTED]', nested: { value: 'token=[REDACTED]' } })
   })
 
-  it('chooses the lowest recognized reasoning effort, independent of display order', () => {
-    const effort = lowestReasoningEffort({
+  it('prefers low reasoning exactly and otherwise leaves the provider default', () => {
+    const info = {
       provider: 'pi-openai-codex',
       id: 'model',
       name: 'model',
@@ -357,14 +559,40 @@ describe('reviewer contracts', () => {
           { id: 'minimal' as never, name: 'Minimal' },
         ],
       },
-    })
-    expect(String(effort)).toBe('minimal')
+    }
+    expect(String(preferredLowReasoningEffort(info))).toBe('low')
+    expect(preferredLowReasoningEffort({
+      ...info,
+      reasoning: { efforts: [{ id: 'minimal' as never, name: 'Minimal' }] },
+    })).toBeUndefined()
   })
 
-  it('assembles a real reviewer stream and sends the lowest effort', async () => {
+  it('forks concurrent reviewer work into an ephemeral conversation', () => {
+    const sessions = new ReviewSessionManager()
+    const agent = execution('write', { path: 'README.md' }).agent!
+    const route = { provider: 'pi-test', model: 'model' }
+    const limits = { maxPairs: 4, maxChars: 20_000 }
+    const first = sessions.acquire(agent, route, 'authorization-v1', limits)
+    const concurrent = sessions.acquire(agent, route, 'authorization-v1', limits)
+
+    expect(first.ephemeral).toBe(false)
+    expect(concurrent.ephemeral).toBe(true)
+    first.commit('{"action":"one"}', '{"outcome":"allow"}')
+    first.release()
+
+    const next = sessions.acquire(agent, route, 'authorization-v1', limits)
+    expect(next.priorMessages).toHaveLength(2)
+    next.release()
+
+    const reset = sessions.acquire(agent, route, 'authorization-v2', limits)
+    expect(reset.priorMessages).toHaveLength(0)
+    reset.release()
+  })
+
+  it('assembles a real reviewer stream and sends low effort without tools', async () => {
     const calls: GenerateOptions[] = []
     const chunks: StreamChunk[] = [
-      { type: 'text-delta', index: 0, text: '{"decision":"allow","reason":"authorized"}' },
+      { type: 'text-delta', index: 0, text: '{"risk_level":"medium","user_authorization":"high","outcome":"allow","rationale":"authorized"}' },
       { type: 'finish', reason: { kind: 'stop' } },
     ]
     const ctx = {
@@ -375,6 +603,7 @@ describe('reviewer contracts', () => {
           provider: 'deepseek-official', id: 'model', name: 'Model',
           reasoning: { efforts: [
             { id: 'high' as never, name: 'High' },
+            { id: 'low' as never, name: 'Low' },
             { id: 'minimal' as never, name: 'Minimal' },
           ] },
         }),
@@ -388,7 +617,7 @@ describe('reviewer contracts', () => {
     const reviewer = new ApprovalReviewer(ctx, () => ({
       modelMode: 'fixed',
       reviewerRoute: JSON.stringify(['deepseek-official', 'model']),
-      thinkingMode: 'lowest',
+      reasoningMode: 'low',
       timeoutMs: 1_000,
     }))
     await expect(reviewer.review({
@@ -397,12 +626,107 @@ describe('reviewer contracts', () => {
       arguments: { path: 'README.md' },
       recentUserRequests: ['update the README'],
       trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
-    })).resolves.toEqual({ decision: 'allow', scope: 'once', reason: 'authorized' })
-    expect(String(calls[0]?.reasoningEffort)).toBe('minimal')
+    })).resolves.toMatchObject({
+      source: 'model',
+      decision: 'allow',
+      riskLevel: 'medium',
+      userAuthorization: 'high',
+      reason: 'authorized',
+    })
+    expect(String(calls[0]?.reasoningEffort)).toBe('low')
     expect(calls[0]?.maxTokens).toBe(256)
     expect(calls[0]).not.toHaveProperty('tools')
+  })
+
+  it('reuses a bounded reviewer conversation for sequential reviews', async () => {
+    const calls: GenerateOptions[] = []
+    const ctx = {
+      llm: {
+        listProviders: () => [{ id: 'pi-test', name: 'Test' }],
+        resolveModelInfo: async () => ({ provider: 'pi-test', id: 'model', name: 'Model' }),
+        stream: (options: GenerateOptions) => {
+          calls.push(options)
+          return (async function* (): AsyncGenerator<StreamChunk> {
+            yield { type: 'text-delta', index: 0, text: '{"outcome":"allow"}' }
+            yield { type: 'finish', reason: { kind: 'stop' } }
+          })()
+        },
+      },
+      logger: { info: () => {} },
+    } as unknown as Context
+    const reviewer = new ApprovalReviewer(ctx, () => ({
+      modelMode: 'fixed',
+      reviewerRoute: JSON.stringify(['pi-test', 'model']),
+      timeoutMs: 1_000,
+    }))
+    const agent = execution('write', { path: 'README.md' }).agent!
+    const subject: ReviewSubject = {
+      stage: 'pre-execute',
+      toolName: 'write',
+      arguments: { path: 'README.md' },
+      agent,
+      recentUserRequests: ['update the README'],
+      trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
+      recentExecutionEvidence: [],
+      downstream: { kind: 'ask', reason: 'approval required' },
+    }
+
+    await reviewer.review(subject)
+    await reviewer.review({ ...subject, arguments: { path: 'SECURITY.md' } })
+
+    expect(calls[0]?.messages).toHaveLength(1)
+    expect(calls[1]?.messages).toHaveLength(3)
+    expect(calls[1]?.messages[0]?.role).toBe('user')
+    expect(calls[1]?.messages[1]?.role).toBe('assistant')
+    expect(calls[1]?.messages[2]?.role).toBe('user')
+  })
+
+  it('keeps oversized reviewer context valid and within the configured character ceiling', async () => {
+    const calls: GenerateOptions[] = []
+    const ctx = {
+      llm: {
+        listProviders: () => [{ id: 'pi-test', name: 'Test' }],
+        resolveModelInfo: async () => ({ provider: 'pi-test', id: 'model', name: 'Model' }),
+        stream: (options: GenerateOptions) => {
+          calls.push(options)
+          return (async function* (): AsyncGenerator<StreamChunk> {
+            yield { type: 'text-delta', index: 0, text: '{"outcome":"allow"}' }
+            yield { type: 'finish', reason: { kind: 'stop' } }
+          })()
+        },
+      },
+      logger: { info: () => {} },
+    } as unknown as Context
+    const reviewer = new ApprovalReviewer(ctx, () => ({
+      modelMode: 'fixed',
+      reviewerRoute: JSON.stringify(['pi-test', 'model']),
+      maxInputChars: 2_000,
+      timeoutMs: 1_000,
+    }))
+
+    await reviewer.review({
+      stage: 'pre-execute',
+      toolName: 'write',
+      arguments: { content: '\\"'.repeat(20_000) },
+      recentUserRequests: ['update the generated fixture'],
+      trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
+      recentExecutionEvidence: [],
+      downstream: { kind: 'ask', reason: 'approval required' },
+    })
+
+    const block = calls[0]?.messages.at(-1)?.content[0]
+    expect(block?.type).toBe('text')
+    if (block?.type !== 'text') throw new Error('review input was not text')
+    expect(block.text.length).toBeLessThanOrEqual(2_000)
+    expect(() => JSON.parse(block.text)).not.toThrow()
   })
 
   it('attributes a provider failure to the requested reviewer route', async () => {
@@ -434,10 +758,16 @@ describe('reviewer contracts', () => {
       arguments: { command: 'echo hi' },
       recentUserRequests: ['say hi'],
       trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
     })
-    expect(decision.decision).toBe('ask')
+    expect(decision).toMatchObject({
+      source: 'failure',
+      decision: 'deny',
+      failureKind: 'configuration',
+    })
     expect(decision.reason).toContain('请求模型：xAI Grok · grok-4.5')
     expect(decision.reason).toContain("Codex error: Tool 'image_generation'")
   })
@@ -465,7 +795,7 @@ describe('reviewer contracts', () => {
             })()
           }
           return (async function* (): AsyncGenerator<StreamChunk> {
-            yield { type: 'text-delta', index: 0, text: '{"decision":"allow","reason":"bounded read"}' }
+            yield { type: 'text-delta', index: 0, text: '{"risk_level":"low","outcome":"allow","rationale":"bounded read"}' }
             yield { type: 'finish', reason: { kind: 'stop' } }
           })()
         },
@@ -484,14 +814,60 @@ describe('reviewer contracts', () => {
       },
       recentUserRequests: ['/resume-codex 01a01e7e-9c42-7260-ab9b-41149f1e5533'],
       trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
     })
-    expect(decision).toEqual({ decision: 'allow', scope: 'once', reason: 'bounded read' })
+    expect(decision).toMatchObject({
+      source: 'model',
+      decision: 'allow',
+      riskLevel: 'low',
+      reason: 'bounded read',
+    })
     expect(attempts).toBe(2)
   })
 
-  it('gives a transport retry its own complete deadline', async () => {
+  it('retries a malformed assessment within the same review budget', async () => {
+    let attempts = 0
+    const ctx = {
+      llm: {
+        listProviders: () => [{ id: 'pi-test', name: 'Test' }],
+        resolveModelInfo: async () => ({ provider: 'pi-test', id: 'model', name: 'Model' }),
+        stream: () => (async function* (): AsyncGenerator<StreamChunk> {
+          attempts += 1
+          yield {
+            type: 'text-delta',
+            index: 0,
+            text: attempts === 1 ? 'not json' : '{"outcome":"allow"}',
+          }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        })(),
+      },
+      logger: { info: () => {} },
+    } as unknown as Context
+    const reviewer = new ApprovalReviewer(ctx, () => ({
+      modelMode: 'fixed',
+      reviewerRoute: JSON.stringify(['pi-test', 'model']),
+      timeoutMs: 1_000,
+      transportRetries: 2,
+    }))
+    const decision = await reviewer.review({
+      stage: 'pre-execute',
+      toolName: 'read',
+      arguments: { file_path: '/workspace/README.md' },
+      recentUserRequests: ['read the README'],
+      trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
+      recentExecutionEvidence: [],
+      downstream: { kind: 'ask', reason: 'approval required' },
+    })
+    expect(decision).toMatchObject({ source: 'model', decision: 'allow', riskLevel: 'low' })
+    expect(attempts).toBe(2)
+  })
+
+  it('shares one total deadline across reviewer retries', async () => {
     let attempts = 0
     const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds))
     const ctx = {
@@ -527,7 +903,7 @@ describe('reviewer contracts', () => {
               }
               return
             }
-            yield { type: 'text-delta', index: 0, text: '{"decision":"allow","reason":"bounded read"}' }
+            yield { type: 'text-delta', index: 0, text: '{"risk_level":"low","outcome":"allow","rationale":"bounded read"}' }
             yield { type: 'finish', reason: { kind: 'stop' } }
           })()
         },
@@ -546,11 +922,17 @@ describe('reviewer contracts', () => {
       arguments: { file_path: '/workspace/README.md' },
       recentUserRequests: ['read the README'],
       trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
     })
-    expect(decision).toEqual({ decision: 'allow', scope: 'once', reason: 'bounded read' })
-    expect(attempts).toBe(2)
+    expect(decision).toMatchObject({
+      source: 'failure',
+      decision: 'deny',
+      failureKind: 'timeout',
+    })
+    expect(attempts).toBe(1)
   })
 
   it('attributes a local reviewer deadline to the selected model instead of the wire protocol', async () => {
@@ -589,10 +971,16 @@ describe('reviewer contracts', () => {
       arguments: { command: 'echo hi' },
       recentUserRequests: ['say hi'],
       trustedDeveloperInstructions: [],
+      trustedUserResponses: [],
+      recentAssistantMessages: [],
       recentExecutionEvidence: [],
       downstream: { kind: 'allow' },
     })
-    expect(decision.decision).toBe('ask')
+    expect(decision).toMatchObject({
+      source: 'failure',
+      decision: 'deny',
+      failureKind: 'timeout',
+    })
     expect(decision.reason).toContain('Test Reviewer · model')
     expect(decision.reason).toContain('20 毫秒')
     expect(decision.reason).not.toContain('OpenAI Responses')

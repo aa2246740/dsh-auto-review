@@ -2,45 +2,47 @@
 
 # Approve for me
 
-DeepSeek Harness asks before a tool runs. This plugin adds a real **Approve for me** preset to that menu. The sandbox stays Workspace Write. Proven-safe reads stop prompting you. Machine-wide deletion is denied here, not by the model. Everything else goes to a model you already registered in DSH. If that review fails, times out, or will not decide, you get the ordinary approval UI.
+DeepSeek Harness applies its permission policy before a tool runs. This plugin adds a real **Approve for me** preset to that menu: the sandbox remains Workspace Write, calls DSH already admits are not reviewed, and actual approval requests go to a separate reviewer model selected from DSH's unified model directory.
+
+Strictly proven local observations may use a fast path. Catastrophic machine-wide actions are denied locally. An unavailable model, timeout, malformed response, exhausted transport, or missing original call context fails closed instead of reopening the human approval UI.
 
 It does not turn the session into Full access.
 
-The git repo is `dsh-auto-review`. The plugin ID stays `dsh-approve-for-me` so existing installs keep working.
+The repository is `dsh-auto-review`. The plugin ID remains `dsh-approve-for-me`, so existing installs do not need to be renamed.
 
-The shots below are official DeepSeek Harness Web (an RC8 local build) with the plugin loaded and **Approve for me** selected.
+The images below come from the official DeepSeek Harness Web UI on a local RC8 build.
 
 ![Approve for me settings card](docs/screenshots/settings-card.png)
 
-Once **Approve for me** is selected, the plugin paints its own shield-and-spark glyph on that row. The three official modes are left alone.
+Once **Approve for me** is selected, the plugin adds its shield-and-spark glyph only to that row. The three official modes remain unchanged.
 
 ![Approve for me permission menu](docs/screenshots/permission-menu.png)
 
-`pwd && ls` finishes without the ordinary approval bar.
+Proven read-only observations such as `pwd && ls` may finish without the ordinary approval bar.
 
-![Allow, ask, deny](docs/screenshots/review-loop.gif)
+![Allow through deny](docs/screenshots/review-loop.gif)
 
-**Allow** — bounded, side-effect-free local observation. In this official session `pwd && ls` printed the workspace listing. No Allow once.
+**Fast allow** — bounded, side-effect-free local observations.
 
 ![Allow](docs/screenshots/allow.png)
 
-**Ask the model** — the fast path cannot prove it, for example reading `.env`. The official UI stays on Deep diving or the ordinary approval panel. If the model will not decide either, you are asked.
+**Model review** — real approval requests the fast path cannot prove, such as sensitive reads or writes, go to the dedicated reviewer model. It must return structured risk, authorization, outcome, and rationale. If the review cannot complete safely, the request is denied.
 
-![Ask the model](docs/screenshots/pending.png)
+![Model review pending](docs/screenshots/pending.png)
 
-**Deny** — `rm -rf /` never reaches the reviewer. The official tool row fails with `拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
+**Local deny** — `rm -rf /` never reaches the reviewer. The official tool row fails with `拒绝自动执行：命令试图递归删除根目录或整个用户目录。`
 
 ![Deny](docs/screenshots/deny.png)
 
-Timeout, retries, and the output cap live under the fold.
+The 90-second overall deadline, three total attempts, and output ceiling live under the settings fold.
 
 ![Safety bounds and advanced settings](docs/screenshots/settings-advanced.png)
 
-The settings copy is Chinese because that is the product UI.
+The settings copy is Chinese because that is the product UI used for these screenshots.
 
 ## Install
 
-Run this from a DeepSeek Harness checkout. The destination folder must stay `dsh-approve-for-me`:
+Run this from a DeepSeek Harness checkout. The destination directory must remain `dsh-approve-for-me`:
 
 ```sh
 git clone https://github.com/aa2246740/dsh-auto-review.git my-plugins/dsh-approve-for-me
@@ -51,23 +53,33 @@ dshx activation-plan dsh-approve-for-me --change new-client
 dshx activate-new-client dsh-approve-for-me --profile web --port <current-web-port>
 ```
 
-When `activate-new-client` prints both `HOST_TREE_ACTIVE` and `CLIENT_MANIFEST_PRESENT`, reload the WebUI once. Pick **Approve for me** in the composer permission menu, then choose the reviewer model in the plugin settings.
+After `activate-new-client` prints `HOST_TREE_ACTIVE` and `CLIENT_MANIFEST_PRESENT`, reload the WebUI once. Select **Approve for me** from the composer permission menu, then choose the reviewer model in plugin settings.
 
-You need [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`, Node `^22.19.0` or `>=24`, at least one working DSH model (API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login)), and [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit).
+Requirements: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`, Node `^22.19.0` or `>=24`, at least one working DSH model through an API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login), and [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit).
 
-Do not also mount the plugin through another bundle or patch. A second mount is a second Loader ID, not a second safety layer.
+Do not mount the plugin again through another bundle or patch. A second mount creates another Loader ID, not another safety layer.
 
 ## How it decides
 
-The fast path is an allowlist, not a "this shell string looks safe" denylist. `ls`, `pwd`, a bounded `find`, and in-workspace `read` / `grep` / `glob` can go through. `rm -rf /`, disk wipes, and fork bombs are denied locally. Reading `.env`, writes, and anything unproven go to the model you picked.
+- Keeps DSH's `workspace-write` sandbox and `ask` approval policy. It never grants Full access.
+- Reviews only requests DSH would otherwise ask about. Calls already allowed or denied by downstream policy are not widened or rewritten.
+- Follows the current Agent model or uses a fixed OAuth/API-key reviewer route. It requests `low` reasoning when the model advertises that level.
+- Uses an allowlist fast path, not a shell-string denylist. `pwd`, `ls`, bounded `find`, and non-sensitive `read` / `grep` / `glob` calls may pass only when they are strictly proven safe.
+- Requires the Codex-style `risk_level`, `user_authorization`, `outcome`, and `rationale` assessment. Critical risk cannot be allowed; high risk requires sufficiently explicit user authorization.
+- Direct user messages and DSH request-header developer or `AGENTS.md` instructions are trusted authorization. An `ask_user_question` answer applies only to its paired question. Assistant messages and other tool results are evidence, not authority.
+- Every approval is one-shot. The model cannot create task-scoped or persistent allow rules. Retries and permission escalations receive a fresh review.
+- Reuses a bounded reviewer conversation only while the parent Agent, model route, policy version, and trusted-authorization version match. Concurrent reviews use empty-history ephemeral forks.
+- Uses a 90-second overall deadline by default. Transport and malformed-output failures receive at most two additional attempts inside that same deadline.
+- Stops the turn after three consecutive explicit denials, or ten denials within the last fifty reviews under the same direct user request.
+- Missing correlation, unavailable routes, timeout, exhausted transport, and invalid responses all fail closed. Parent cancellation remains cancellation.
 
-The reviewer sees bounded user text plus trusted DSH request-header instructions. Prior tool output is evidence, not authority. If the model marks an exact action safe to repeat, that reuse lasts only for the current user message. A new prompt, a new session, or a Host restart clears it. **每次重新审批** (re-approve every time) turns even that off.
+Coverage includes registered tools, Code Mode sub-dispatches, and MCP tools that pass through DSH's tool runtime. Slash commands, background plugin work, Creator activation, Host RPC, and process-external subagents are out of scope.
 
-Timeouts, transport errors, malformed output, and a missing route fall back to you. Slash commands, background plugin work, Host RPC, and process-external subagents are out of scope. See [SECURITY.md](SECURITY.md) to report a hole.
+See [SECURITY.md](SECURITY.md) for the trust boundary. The primary-source Codex comparison is in [`docs/codex-auto-review-reference-2026-08-23.md`](docs/codex-auto-review-reference-2026-08-23.md).
 
 ## Develop
 
-The repo has to live at `my-plugins/dsh-approve-for-me` inside an RC8 checkout. The TypeScript and client build reuse that tree's official packages plus dshx's `externalClientBundle`.
+The repository must live at `my-plugins/dsh-approve-for-me` inside an RC8 checkout. Its TypeScript and client build reuse that checkout's official packages plus dshx's `externalClientBundle`.
 
 ```sh
 pnpm install --ignore-workspace
@@ -77,8 +89,8 @@ pnpm run build
 dshx check dsh-approve-for-me
 ```
 
-Passing the source tests does not prove the browser loaded. The build must emit a lazy-CJS `lib/client.js`.
+Passing source tests does not prove browser activation. The build must emit a lazy-CJS `lib/client.js`, and the lifecycle branch reported by `dshx activation-plan` must be completed and verified in the real GUI.
 
 ## License
 
-[MIT](LICENSE). Not affiliated with DeepSeek or OpenAI.
+[MIT](LICENSE). This project is not affiliated with or endorsed by DeepSeek or OpenAI.

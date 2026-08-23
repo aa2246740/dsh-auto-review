@@ -16,11 +16,10 @@ interface ReviewerSettings {
   enabled?: boolean
   modelMode?: 'follow-agent' | 'fixed'
   reviewerRoute?: string
-  thinkingMode?: 'lowest' | 'provider-default'
+  reasoningMode?: 'low' | 'provider-default'
   timeoutMs?: number
   transportRetries?: number
   maxOutputTokens?: number
-  repeatApprovalMode?: 'same-request-exact' | 'off'
 }
 
 interface RouteOption {
@@ -119,7 +118,7 @@ function LoadedCard({ scope, loadCatalog }: CardInjected): ReactNode {
       <div className={styles['heading']}>
         <div>
           <h3 className={styles['title']}>替我审批</h3>
-          <p className={styles['subtitle']}>先在输入框权限菜单选择 Approve for me；其他三种官方模式不会被本插件接管。</p>
+          <p className={styles['subtitle']}>先在输入框权限菜单选择 Approve for me。插件只接管 DSH 原本会发起的审批，不审查已直接放行的工具调用。</p>
         </div>
         <label className={styles['switchLabel']}>
           <input
@@ -159,21 +158,21 @@ function LoadedCard({ scope, loadCatalog }: CardInjected): ReactNode {
       <label className={styles['field']}>
         <span className={styles['fieldLabel']}>思考强度</span>
         <select
-          value={settings.thinkingMode ?? 'lowest'}
+          value={settings.reasoningMode ?? 'low'}
           disabled={!enabled || !snapshot.writable || writing}
           onChange={event => {
-            void write(() => scope.set('thinkingMode', event.target.value))
+            void write(() => scope.set('reasoningMode', event.target.value))
           }}
         >
-          <option value="lowest">该模型支持的最低档（默认）</option>
-          <option value="provider-default">服务商默认档</option>
+          <option value="low">优先使用 Low；不支持时用服务商默认档（默认）</option>
+          <option value="provider-default">始终使用服务商默认档</option>
         </select>
       </label>
 
       <div className={styles['statusRow']}>
         <span className={catalogState === 'error' ? styles['warning'] : styles['muted']}>
           {catalogState === 'loading' && '正在读取 DSH 模型目录…'}
-          {catalogState === 'ready' && options.length === 0 && '当前没有已注册模型；需要审批时会回退给你。'}
+          {catalogState === 'ready' && options.length === 0 && '当前没有已注册模型；需要审批时会失败关闭并拒绝该次请求。'}
           {catalogState === 'ready' && options.length > 0 && `可用 DSH 模型 ${String(options.length)} 个`}
           {catalogState === 'error' && `无法读取 DSH 模型目录：${catalogError}`}
         </span>
@@ -182,26 +181,13 @@ function LoadedCard({ scope, loadCatalog }: CardInjected): ReactNode {
         </button>
       </div>
 
-      <label className={styles['field']}>
-        <span className={styles['fieldLabel']}>相同操作复用</span>
-        <select
-          value={settings.repeatApprovalMode ?? 'same-request-exact'}
-          disabled={!enabled || !snapshot.writable || writing}
-          onChange={event => {
-            void write(() => scope.set('repeatApprovalMode', event.target.value))
-          }}
-        >
-          <option value="same-request-exact">同一用户任务内精确匹配（默认）</option>
-          <option value="off">每次重新审批</option>
-        </select>
-      </label>
-
       <details className={styles['details']}>
         <summary>安全边界与高级参数</summary>
-        <p>只处理注册工具的 pre-execute 与 approval 请求；斜杠命令、后台任务和插件私有 Host RPC 不在覆盖面内。</p>
-        <p>保留 Workspace Write 沙箱；OAuth 与 API Key 模型都通过 DSH 的统一 LLM 目录调用，Full access 仍由官方模式负责。</p>
-        <p>精确复用同时绑定工具名、完整参数、工作目录和最近一条用户请求；新用户消息、换会话或重启 Host 后自动失效。</p>
-        <p>模型失败、重试耗尽、超时、输出不合规或上下文不足时不会放行，而是继续显示人工审批。</p>
+        <p>只处理注册工具进入的真实审批请求；斜杠命令、后台任务和插件私有 Host RPC 不在覆盖面内。</p>
+        <p>保留 Workspace Write 沙箱。审批模型通过 DSH 的统一 LLM 目录调用，且不会获得工具；Full access 仍由官方模式负责。</p>
+        <p>每次审批都独立判断。模型不会创建“始终允许”或任务内复用规则。</p>
+        <p>模型不可用、重试耗尽、超时、输出不合规或缺少原始调用上下文时失败关闭并拒绝，不再弹回人工审批。</p>
+        <p>同一用户请求下连续拒绝 3 次，或最近 50 次中拒绝 10 次，会停止当前轮次，防止反复绕过策略。</p>
         <div className={styles['advancedGrid']}>
           <label>
             超时（秒）
@@ -209,7 +195,7 @@ function LoadedCard({ scope, loadCatalog }: CardInjected): ReactNode {
               type="number"
               min={1}
               max={120}
-              value={Math.round((settings.timeoutMs ?? 30_000) / 1_000)}
+              value={Math.round((settings.timeoutMs ?? 90_000) / 1_000)}
               disabled={!snapshot.writable || writing}
               onChange={event => {
                 const seconds = Number(event.target.value)
@@ -218,12 +204,12 @@ function LoadedCard({ scope, loadCatalog }: CardInjected): ReactNode {
             />
           </label>
           <label>
-            传输失败重试次数
+            审查失败重试次数
             <input
               type="number"
               min={0}
               max={2}
-              value={settings.transportRetries ?? 1}
+              value={settings.transportRetries ?? 2}
               disabled={!snapshot.writable || writing}
               onChange={event => {
                 const retries = Number(event.target.value)

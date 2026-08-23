@@ -59,6 +59,26 @@ const SAFE_FIND_ONE_ARITY = new Set([
   '-size', '-type', '-uid', '-user', '-used', '-wholename',
 ])
 
+function allow(reason: string): ReviewDecision {
+  return {
+    source: 'deterministic',
+    decision: 'allow',
+    riskLevel: 'low',
+    userAuthorization: 'unknown',
+    reason,
+  }
+}
+
+function deny(reason: string): ReviewDecision {
+  return {
+    source: 'deterministic',
+    decision: 'deny',
+    riskLevel: 'critical',
+    userAuthorization: 'unknown',
+    reason,
+  }
+}
+
 function recordOf(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -348,7 +368,7 @@ function deterministicShellObservation(exec: ToolExecution): ReviewDecision | un
   if (commands === undefined || !commands.every(tokens => safeObservationCommand(tokens, cwd))) {
     return undefined
   }
-  return { decision: 'allow', scope: 'once', reason: '命令链仅执行有界、无副作用的本地观察。' }
+  return allow('命令链仅执行有界、无副作用的本地观察。')
 }
 
 /** Match only catastrophic machine-wide operations, not ordinary exact-target cleanup. */
@@ -376,14 +396,14 @@ export function catastrophicReason(exec: Pick<ToolExecution, 'name' | 'arguments
  */
 export function deterministicDecision(exec: ToolExecution): ReviewDecision | undefined {
   const catastrophic = catastrophicReason(exec)
-  if (catastrophic !== undefined) return { decision: 'deny', reason: catastrophic }
+  if (catastrophic !== undefined) return deny(catastrophic)
   const shellObservation = deterministicShellObservation(exec)
   if (shellObservation !== undefined) return shellObservation
   if (SAFE_OBSERVATION_TOOLS.has(exec.name)) {
-    return { decision: 'allow', scope: 'once', reason: '只读或询问型 DSH 操作。' }
+    return allow('只读或询问型 DSH 操作。')
   }
   if (SAFE_SESSION_WRITES.has(exec.name)) {
-    return { decision: 'allow', scope: 'once', reason: '仅更新当前 DSH 会话内的计划状态。' }
+    return allow('仅更新当前 DSH 会话内的计划状态。')
   }
   if (!WORKSPACE_READ_TOOLS.has(exec.name)) return undefined
 
@@ -391,10 +411,10 @@ export function deterministicDecision(exec: ToolExecution): ReviewDecision | und
   const paths = candidatePaths(exec.arguments)
   // glob/grep/lsp default to the session cwd when no explicit root is supplied.
   if (paths.length === 0 && exec.name !== 'read' && exec.name !== 'read_image') {
-    return { decision: 'allow', scope: 'once', reason: '在当前工作区内执行只读查询。' }
+    return allow('在当前工作区内执行只读查询。')
   }
   if (paths.length > 0 && paths.every(path => safeObservationPath(path, cwd))) {
-    return { decision: 'allow', scope: 'once', reason: '读取目标有界且不命中敏感路径。' }
+    return allow('读取目标有界且不命中敏感路径。')
   }
   return undefined
 }
