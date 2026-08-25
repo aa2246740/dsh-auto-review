@@ -40,20 +40,30 @@ DeepSeek Harness 跑工具前会按权限策略决定是否询问。这个插件
 
 ## 安装
 
-在 DeepSeek Harness 仓库中执行。目录名必须保持为 `dsh-approve-for-me`：
+不需要 dshx。默认走官方 `dsh`。Loader id：`dsh-approve-for-me`。
 
 ```sh
-git clone https://github.com/aa2246740/dsh-auto-review.git my-plugins/dsh-approve-for-me
-pnpm --dir my-plugins/dsh-approve-for-me install --ignore-workspace
-pnpm --dir my-plugins/dsh-approve-for-me build
-dshx check dsh-approve-for-me
-dshx activation-plan dsh-approve-for-me --change new-client
-dshx activate-new-client dsh-approve-for-me --profile web --port <当前 Web 端口>
+dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-`activate-new-client` 输出 `HOST_TREE_ACTIVE` 和 `CLIENT_MANIFEST_PRESENT` 后刷新一次 WebUI。在输入框权限菜单选择 **Approve for me**，再到插件设置中选择审批模型。
+或本地 clone：
 
-需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`、Node `^22.19.0` 或 `>=24`、至少一个可用的 DSH 模型（API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login)），以及 [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit)。
+```sh
+git clone https://github.com/aa2246740/dsh-auto-review.git
+dsh plugin --profile web add ./dsh-auto-review
+```
+
+然后**重启这个 DSH Host**，**刷新页面**。`dsh plugin add` 只写 profile，不会热挂正在跑的 Host。
+
+装好后在输入框权限菜单选择 **Approve for me**，再到插件设置中选择审批模型。
+
+卸载：
+
+```sh
+dsh plugin --profile web remove dsh-approve-for-me
+```
+
+需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`、Node `^22.19.0` 或 `>=24`、至少一个可用的 DSH 模型（API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login)）。
 
 不要再通过另一份 bundle 或 patch 重复挂载。重复挂载只会产生第二个 Loader ID，不会增加第二层安全保护。
 
@@ -87,7 +97,11 @@ pnpm run build
 dshx check dsh-approve-for-me
 ```
 
-源码测试通过不代表浏览器已加载。构建必须生成 lazy-CJS 的 `lib/client.js`，并按 `dshx activation-plan` 给出的生命周期分支完成激活和真实 GUI 验证。
+源码测试通过不代表浏览器已加载。构建必须生成 lazy-CJS 的 `lib/client.js`，并在真实 GUI 里验证权限菜单和设置页。
+
+## Optional: dshx
+
+已经在用 Agent 对着一份 Harness 检出干活？先装 [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit)，再把那个仓库和本仓库（`https://github.com/aa2246740/dsh-auto-review`）一起交给 Agent。后面它自己会装。
 
 ## 许可
 

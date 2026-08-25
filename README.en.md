@@ -42,20 +42,30 @@ The settings copy is Chinese because that is the product UI used for these scree
 
 ## Install
 
-Run this from a DeepSeek Harness checkout. The destination directory must remain `dsh-approve-for-me`:
+You do **not** need dshx. The default path is official `dsh`. Loader id: `dsh-approve-for-me`.
 
 ```sh
-git clone https://github.com/aa2246740/dsh-auto-review.git my-plugins/dsh-approve-for-me
-pnpm --dir my-plugins/dsh-approve-for-me install --ignore-workspace
-pnpm --dir my-plugins/dsh-approve-for-me build
-dshx check dsh-approve-for-me
-dshx activation-plan dsh-approve-for-me --change new-client
-dshx activate-new-client dsh-approve-for-me --profile web --port <current-web-port>
+dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-After `activate-new-client` prints `HOST_TREE_ACTIVE` and `CLIENT_MANIFEST_PRESENT`, reload the WebUI once. Select **Approve for me** from the composer permission menu, then choose the reviewer model in plugin settings.
+Or from a clone:
 
-Requirements: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`, Node `^22.19.0` or `>=24`, at least one working DSH model through an API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login), and [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit).
+```sh
+git clone https://github.com/aa2246740/dsh-auto-review.git
+dsh plugin --profile web add ./dsh-auto-review
+```
+
+Then **restart that DSH Host** and **reload the page**. `dsh plugin add` writes the profile; it does not hot-load a running Host.
+
+After that, select **Approve for me** from the composer permission menu, then choose the reviewer model in plugin settings.
+
+Remove:
+
+```sh
+dsh plugin --profile web remove dsh-approve-for-me
+```
+
+Requirements: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `v0.1.0-rc.8`, Node `^22.19.0` or `>=24`, and at least one working DSH model through an API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login).
 
 Do not mount the plugin again through another bundle or patch. A second mount creates another Loader ID, not another safety layer.
 
@@ -89,7 +99,11 @@ pnpm run build
 dshx check dsh-approve-for-me
 ```
 
-Passing source tests does not prove browser activation. The build must emit a lazy-CJS `lib/client.js`, and the lifecycle branch reported by `dshx activation-plan` must be completed and verified in the real GUI.
+Passing source tests does not prove browser activation. The build must emit a lazy-CJS `lib/client.js`, then verify the permission menu and settings page in the real GUI.
+
+## Optional: dshx
+
+Already using an Agent against a Harness checkout? Install [dshx](https://github.com/aa2246740/dsh-external-plugin-devkit), then give the Agent both that repo and this one (`https://github.com/aa2246740/dsh-auto-review`). It can take it from there.
 
 ## License
 

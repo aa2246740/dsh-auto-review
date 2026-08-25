@@ -1,0 +1,22 @@
+# Official bundle layer. `dsh plugin add` applies this into the profile.
+# Rows resolve by package name so the installed copy is what boots.
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      approve-for-me:
+        sandbox: workspace-write
+        approval: ask
+        name: Approve for me
+        description: Keep workspace confinement and route real approval requests to an automatic reviewer that fails closed.
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+- insert:
+    - id: dsh-approve-for-me
+      name: dsh-approve-for-me

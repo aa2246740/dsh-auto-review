@@ -1,5 +1,5 @@
 node_modules
-lib/
+lib/types/
 coverage/
 .dshx/
 .env
@@ -7,3 +7,4 @@ coverage/
 !.env.example
 .DS_Store
 *.log
+*.tsbuildinfo
