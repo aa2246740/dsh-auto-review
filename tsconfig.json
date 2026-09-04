@@ -30,7 +30,13 @@
       "path": "../../packages/llm/llm"
     },
     {
-      "path": "../../packages/client/runtime"
+      "path": "../../packages/api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/client/ui-settings"
+    },
+    {
+      "path": "../../packages/client/ui-renderer"
     },
     {
       "path": "../../packages/client/ui-settings-plugins"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { CallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import {
   APPROVE_FOR_ME_PRESET,
@@ -27,14 +28,14 @@ import {
 
 function execution(name: string, args: unknown, cwd = '/workspace'): ToolExecution {
   return {
-    callId: CallId('test-call'),
-    rootCallId: CallId('test-call'),
+    callId: ToolCallId('test-call'),
+    rootCallId: ToolCallId('test-call'),
     name,
     arguments: args,
     signal: new AbortController().signal,
     token: Symbol('test') as ToolExecution['token'],
     agent: {
-      session: { header: { cwd }, events: [], requestHeader: () => undefined },
+      session: { header: { cwd }, snapshotEvents: () => [], requestHeader: () => undefined },
     } as ToolExecution['agent'],
   }
 }
@@ -194,7 +195,7 @@ describe('auto-review coordinator', () => {
       ...base.agent!,
       session: {
         ...base.agent!.session,
-        events: [{
+        snapshotEvents: () => [{
           type: 'user/message',
           data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'update the local file' }] },
         }],
@@ -356,7 +357,7 @@ describe('auto-review coordinator', () => {
     const { agent, cancellations } = agentHarness()
     const { coordinator } = coordinatorHarness([denyDecision, denyDecision, denyDecision])
     for (let index = 0; index < 3; index += 1) {
-      const callId = CallId(`deny-${String(index)}`)
+      const callId = ToolCallId(`deny-${String(index)}`)
       const exec = {
         ...execution('write', { path: `file-${String(index)}.txt`, content: 'x' }),
         callId,
@@ -404,13 +405,13 @@ describe('reviewer contracts', () => {
       file_path: '/Users/alice/work/project/outputs/site/index.html',
       limit: 80,
     }, '/Users/alice/work/DSH')
-    const callId = CallId('foreign-session-call')
-    const questionCallId = CallId('user-question-call')
+    const callId = ToolCallId('foreign-session-call')
+    const questionCallId = ToolCallId('user-question-call')
     const agent = {
       ...base.agent,
       session: {
         ...base.agent!.session,
-        events: [
+        snapshotEvents: () => [
           {
             type: 'user/message',
             data: {
@@ -497,7 +498,7 @@ describe('reviewer contracts', () => {
       ...base.agent,
       session: {
         ...base.agent!.session,
-        events: [],
+        snapshotEvents: () => [],
         requestHeader: () => ({
           config: { provider: 'pi-test', model: 'model' },
           system: 'The DeepSeek Harness implementation checkout is at /Users/alice/work/deepseek-harness. Use this checkout to inspect or extend DSH itself.',

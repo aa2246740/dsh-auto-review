@@ -1,7 +1,8 @@
 /** Approval-only routing and rejection-loop control for Auto-review. */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, type CallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import { deterministicDecision } from './policy.ts'
@@ -57,8 +58,9 @@ function signalAborted(signal: AbortSignal | undefined): boolean {
 }
 
 function latestDirectUserRequestEpoch(agent: Agent): number {
-  for (let index = agent.session.events.length - 1; index >= 0; index -= 1) {
-    const event = agent.session.events[index]!
+  const events = agent.session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]!
     if (event.type === 'user/message' && event.data.source.kind === 'user') return index
   }
   return -1
@@ -102,7 +104,7 @@ function feedbackText(toolName: string, decision: ReviewDecision): string {
  * falls through to the human answerer while Approve for me is active.
  */
 export class AutoReviewCoordinator {
-  private readonly pending = new Map<CallId, PendingReview>()
+  private readonly pending = new Map<ToolCallId, PendingReview>()
   private readonly rejectionCircuits = new WeakMap<Agent, DenialCircuitBreaker>()
 
   constructor(
