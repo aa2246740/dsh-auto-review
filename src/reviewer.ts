@@ -6,11 +6,11 @@ import {
   BlockAssembler,
   ReasoningEffortId,
   createUserMessage,
-  type CallId,
   type LlmResolvedModelInfo,
   type Message,
   type ReasoningEffortId as ReasoningEffort,
 } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { ReviewerSettings } from './dsh-approve-for-me.ts'
 import {
@@ -181,8 +181,9 @@ export function preferredLowReasoningEffort(info: LlmResolvedModelInfo): Reasoni
 function textFromLatestUserRequests(agent: Agent, maxChars: number): string[] {
   const requests: string[] = []
   let remaining = maxChars
-  for (let index = agent.session.events.length - 1; index >= 0 && requests.length < 3 && remaining > 0; index -= 1) {
-    const event = agent.session.events[index]!
+  const events = agent.session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0 && requests.length < 3 && remaining > 0; index -= 1) {
+    const event = events[index]!
     if (event.type !== 'user/message' || event.data.source.kind !== 'user') continue
     const text = event.data.content
       .filter((block): block is Extract<(typeof event.data.content)[number], { type: 'text' }> => block.type === 'text')
@@ -203,9 +204,9 @@ function textFromTrustedDeveloperInstructions(agent: Agent, maxChars: number): s
   return [redactText(system).slice(0, maxChars)]
 }
 
-function successfulToolResults(agent: Agent): Map<CallId, unknown> {
-  const results = new Map<CallId, unknown>()
-  for (const event of agent.session.events) {
+function successfulToolResults(agent: Agent): Map<ToolCallId, unknown> {
+  const results = new Map<ToolCallId, unknown>()
+  for (const event of agent.session.snapshotEvents()) {
     if (event.type !== 'tool/result') continue
     const source = event.data.message.source
     if (source.kind !== 'tool'
@@ -219,8 +220,9 @@ function trustedUserResponses(agent: Agent, maxChars: number): TrustedUserRespon
   const results = successfulToolResults(agent)
   const responses: TrustedUserResponse[] = []
   let remaining = maxChars
-  for (let index = agent.session.events.length - 1; index >= 0 && responses.length < 4; index -= 1) {
-    const event = agent.session.events[index]!
+  const events = agent.session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0 && responses.length < 4; index -= 1) {
+    const event = events[index]!
     if (event.type !== 'tool/call' || event.data.name !== 'ask_user_question') continue
     const response = results.get(event.data.callId)
     if (response === undefined || remaining <= 0) continue
@@ -251,7 +253,7 @@ function trustedAuthorizationVersion(agent: Agent | undefined): string {
   if (agent === undefined) return 'no-parent-agent'
   const versionParts: unknown[] = []
   const results = successfulToolResults(agent)
-  for (const event of agent.session.events) {
+  for (const event of agent.session.snapshotEvents()) {
     if (event.type === 'user/message' && event.data.source.kind === 'user') {
       versionParts.push(['user', event.data.content])
       continue
@@ -275,8 +277,9 @@ function trustedAuthorizationVersion(agent: Agent | undefined): string {
 function textFromRecentAssistantMessages(agent: Agent, maxChars: number): string[] {
   const messages: string[] = []
   let remaining = maxChars
-  for (let index = agent.session.events.length - 1; index >= 0 && messages.length < 4 && remaining > 0; index -= 1) {
-    const event = agent.session.events[index]!
+  const events = agent.session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0 && messages.length < 4 && remaining > 0; index -= 1) {
+    const event = events[index]!
     if (event.type !== 'assistant/message') continue
     const text = event.data.message.content
       .filter((block): block is Extract<(typeof event.data.message.content)[number], { type: 'text' }> => block.type === 'text')
@@ -302,14 +305,15 @@ function parseLoggedArguments(value: string): unknown {
 /** Collect a bounded completed-tool trail as untrusted provenance. */
 function recentExecutionEvidence(
   agent: Agent,
-  currentCallId: CallId,
+  currentCallId: ToolCallId,
   maxChars: number,
 ): ReviewExecutionEvidence[] {
-  const results = new Map<CallId, string>()
+  const results = new Map<ToolCallId, string>()
   const evidence: ReviewExecutionEvidence[] = []
   let remaining = maxChars
-  for (let index = agent.session.events.length - 1; index >= 0 && evidence.length < 4; index -= 1) {
-    const event = agent.session.events[index]!
+  const events = agent.session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0 && evidence.length < 4; index -= 1) {
+    const event = events[index]!
     if (event.type === 'tool/result') {
       const source = event.data.message.source
       if (source.kind !== 'tool') continue

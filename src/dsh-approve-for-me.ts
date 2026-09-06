@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { AutoReviewCoordinator } from './coordinator.ts'
 import { ApprovalReviewer } from './reviewer.ts'
@@ -15,19 +15,19 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Official Web permission-preset service required by this plugin. */
     permissionPresets: {
-      current(events: Agent['session']['events']): string
+      current(session: Agent['session']): string
     }
   }
 }
 
 export const name = 'dsh-approve-for-me'
-export const inject = ['tools', 'llm', 'approval', 'permissionPresets']
+export const inject = ['tools', 'llm', 'approval', 'permissionPresets', 'settings']
 
 /** Permission-preset key that delegates approval requests to this reviewer. */
 export const APPROVE_FOR_ME_PRESET = 'approve-for-me'
 
 /** Durable settings namespace shared with the browser half. */
-export const APPROVE_FOR_ME_SETTINGS_NAMESPACE = settingsNamespace('dsh-approve-for-me')
+export const APPROVE_FOR_ME_SETTINGS_NAMESPACE = 'dsh-approve-for-me'
 
 /** User-owned reviewer settings. */
 export interface ReviewerSettings {
@@ -76,14 +76,14 @@ export function reviewerModeActive(
   settings: ReviewerSettings,
 ): boolean {
   return settings.enabled !== false
-    && ctx.permissionPresets.current(agent.session.events) === APPROVE_FOR_ME_PRESET
+    && ctx.permissionPresets.current(agent.session) === APPROVE_FOR_ME_PRESET
 }
 
 /** Install approval-only Auto-review without changing DSH core policy or tool definitions. */
 export function apply(ctx: Context, config: Config): void {
   ctx.logger.info('[my-plugins/dsh-approve-for-me] loaded')
   let source: () => ReviewerSettings = () => config
-  installSettingsSection(ctx, APPROVE_FOR_ME_SETTINGS_NAMESPACE, Config, config, {
+  ctx.settings.installSection(ctx, APPROVE_FOR_ME_SETTINGS_NAMESPACE, Config, config, {
     setSource: current => { source = current },
     // Every decision reads the current section. No registration needs rebuilding.
     onChange: () => {},

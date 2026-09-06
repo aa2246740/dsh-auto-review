@@ -1,6 +1,7 @@
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
@@ -8,7 +9,7 @@ import { installApproveForMeIcon } from './permission-mode-icon.ts'
 import styles from './styles.module.css'
 
 export const name = 'dsh-approve-for-me-client'
-export const inject = ['slots', 'settingsScope', 'connection']
+export const inject = ['slots', 'settingsScope', 'remote', 'remote.session']
 
 const SETTINGS_NAMESPACE = 'dsh-approve-for-me'
 
@@ -35,11 +36,10 @@ interface CardInjected {
 /** Register the official Plugins-page card and bind it to durable Host settings. */
 export function apply(ctx: ClientContext): void {
   const scope = ctx.settingsScope.bind<ReviewerSettings>({ namespace: SETTINGS_NAMESPACE })
-  const connection = ctx.get('connection') as ConnectionHandle
   const loadCatalog = async (): Promise<RouteOption[]> => {
-    const response = await connection.api.llm.models({})
-    if (!response.result.ok) throw new Error(response.result.error.message)
-    return response.result.value.groups.flatMap(group => group.models.map(model => ({
+    const response = await ctx.remote.session.modelCatalog()
+    if (!response.ok) throw new Error(response.error.message)
+    return response.value.groups.flatMap(group => group.models.map(model => ({
       value: JSON.stringify([group.id, model.id]),
       label: `${group.name} · ${model.name}`,
     })))
