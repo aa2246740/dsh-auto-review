@@ -121,6 +121,15 @@ describe('deterministic approval boundary', () => {
   it('keeps sensitive reads behind the model reviewer', () => {
     expect(deterministicDecision(execution('read', { path: '../.ssh/id_ed25519' }))).toBeUndefined()
     expect(deterministicDecision(execution('read', { path: '.env' }))).toBeUndefined()
+    expect(deterministicDecision(execution('read', { path: '.env.local' }))).toBeUndefined()
+    expect(deterministicDecision(execution('read', { path: '/workspace/.env.production' }))).toBeUndefined()
+    expect(deterministicDecision(execution('read', { path: '/Users/alice/.codex/auth.json' }))).toBeUndefined()
+    expect(deterministicDecision(execution('read', { path: 'auth.json' }, '/Users/alice/.codex'))).toBeUndefined()
+    expect(deterministicDecision(execution('bash', {
+      command: 'head auth.json',
+      workdir: '/Users/alice/.codex',
+    }))).toBeUndefined()
+    expect(deterministicDecision(execution('read', { path: 'src/environment.ts' }))?.decision).toBe('allow')
   })
 
   it.each(CAPTURED_PROMPTED_OBSERVATIONS)(
@@ -490,7 +499,7 @@ describe('reviewer contracts', () => {
     expect(JSON.stringify(subject.recentExecutionEvidence)).not.toContain('ask_user_question')
   })
 
-  it('frames the request header as trusted developer instructions', () => {
+  it('frames the latest system/message as trusted developer instructions', () => {
     const base = execution('bash', {
       command: 'find /Users/alice/work/deepseek-harness -type f | head -10',
     }, '/Users/alice/work/DSH')
@@ -498,10 +507,34 @@ describe('reviewer contracts', () => {
       ...base.agent,
       session: {
         ...base.agent!.session,
-        snapshotEvents: () => [],
+        snapshotEvents: () => [
+          {
+            type: 'system/message',
+            data: {
+              message: {
+                role: 'system',
+                content: [{
+                  type: 'text',
+                  text: 'Older checkout instructions should be ignored once a later system/message exists.',
+                }],
+              },
+            },
+          },
+          {
+            type: 'system/message',
+            data: {
+              message: {
+                role: 'system',
+                content: [{
+                  type: 'text',
+                  text: 'The DeepSeek Harness implementation checkout is at /Users/alice/work/deepseek-harness. Use this checkout to inspect or extend DSH itself.',
+                }],
+              },
+            },
+          },
+        ],
         requestHeader: () => ({
           config: { provider: 'pi-test', model: 'model' },
-          system: 'The DeepSeek Harness implementation checkout is at /Users/alice/work/deepseek-harness. Use this checkout to inspect or extend DSH itself.',
         }),
       },
     } as ToolExecution['agent']
