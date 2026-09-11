@@ -12,16 +12,29 @@ const ICON_ATTRIBUTE = 'data-dsh-approve-for-me-icon'
 const TRIGGER_ATTRIBUTE = 'data-dsh-approve-for-me-trigger'
 const LABEL_ATTRIBUTE = 'data-dsh-approve-for-me-label'
 const SVG_NS = 'http://www.w3.org/2000/svg'
-const REQUIRED_PERMISSION_ROWS = ['Read Only', 'Workspace Write', 'Full access'] as const
+
+/** Official composer rows in every locale DSH 0.1.5-rc.2 actually ships. */
+const OFFICIAL_PERMISSION_LABEL_SETS = [
+  ['Read Only', 'Workspace Write', 'Full access'],
+  ['仅可查看', '工作区内修改', '完全权限'],
+] as const
 
 function exactText(element: Element): string {
   return element.textContent?.trim() ?? ''
 }
 
-/** Fail closed: only enhance a menu that also contains DSH's three official permission rows. */
+function hasOfficialPermissionRows(labels: readonly string[]): boolean {
+  return OFFICIAL_PERMISSION_LABEL_SETS.some(required =>
+    required.every(label => labels.includes(label)))
+}
+
+/**
+ * Fail closed: the composer permission menu is the one that lists this
+ * plugin's preset next to DSH's three official rows. Official labels are
+ * locale-specific; 0.1.5-rc.2 ships English and Simplified Chinese.
+ */
 export function isPermissionPresetMenu(labels: readonly string[]): boolean {
-  return labels.includes(APPROVE_FOR_ME_LABEL)
-    && REQUIRED_PERMISSION_ROWS.every(label => labels.includes(label))
+  return labels.includes(APPROVE_FOR_ME_LABEL) && hasOfficialPermissionRows(labels)
 }
 
 function createSvg(): SVGSVGElement {
@@ -65,7 +78,14 @@ function directLabel(button: HTMLButtonElement): HTMLElement | undefined {
 function enhanceMenuRows(root: ParentNode): void {
   for (const menu of root.querySelectorAll<HTMLElement>('[role="menu"]')) {
     const rows = Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]'))
-    if (!isPermissionPresetMenu(rows.map(exactText))) continue
+    const labels = rows.map(exactText)
+    const officialGlyphs = rows.filter(row =>
+      exactText(row) !== APPROVE_FOR_ME_LABEL && row.querySelector('svg') !== null).length
+    // Official rows already carry shield SVGs. Accept that shape so a future
+    // locale cannot hide the icon the way English-only matching did on zh-CN.
+    if (!isPermissionPresetMenu(labels) && !(labels.includes(APPROVE_FOR_ME_LABEL) && officialGlyphs >= 3)) {
+      continue
+    }
     const button = rows.find(row => exactText(row) === APPROVE_FOR_ME_LABEL)
     if (button === undefined || button.querySelector(`[${ICON_ATTRIBUTE}]`) !== null) continue
     const label = directLabel(button)
@@ -74,11 +94,13 @@ function enhanceMenuRows(root: ParentNode): void {
 }
 
 function enhanceCurrentTrigger(root: ParentNode): void {
-  for (const button of root.querySelectorAll<HTMLButtonElement>('button[aria-label]')) {
-    if (!button.getAttribute('aria-label')?.includes(APPROVE_FOR_ME_LABEL)) continue
-    if (button.querySelector(`[${ICON_ATTRIBUTE}]`) !== null) continue
+  for (const button of root.querySelectorAll<HTMLButtonElement>('button')) {
+    if (button.getAttribute('role') === 'menuitem') continue
     const label = directLabel(button)
+    const aria = button.getAttribute('aria-label') ?? ''
+    if (label === undefined && !aria.includes(APPROVE_FOR_ME_LABEL)) continue
     if (label === undefined) continue
+    if (button.querySelector(`[${ICON_ATTRIBUTE}]`) !== null) continue
     button.setAttribute(TRIGGER_ATTRIBUTE, '')
     label.setAttribute(LABEL_ATTRIBUTE, '')
     button.insertBefore(createIcon('trigger'), label)
@@ -93,7 +115,7 @@ function enhance(root: ParentNode): void {
 function touchesPermissionSurface(node: Node): boolean {
   const element = node instanceof Element ? node : node.parentElement
   if (element === null) return false
-  if (element.matches('[role="menu"], button[aria-label]')) return true
+  if (element.matches('[role="menu"], button[aria-label], button')) return true
   if (element.closest('[role="menu"], button[aria-label]') !== null) return true
   return element.querySelector('[role="menu"], button[aria-label]') !== null
 }
@@ -104,10 +126,10 @@ function relevantMutation(records: readonly MutationRecord[]): boolean {
 }
 
 /**
- * Add the plugin-owned glyph without patching DSH core. The permission popup
- * is mounted only while open, so a bounded observer reapplies the decoration
- * after React creates or replaces that row. HMR disposal removes every node
- * and attribute owned by this enhancer.
+ * Add the plugin-owned glyph without patching DSH core. Official PermissionSelect
+ * only maps icons for built-in preset ids; host-configured rows stay icon-less
+ * until this decorator runs. The popup exists only while open, so a bounded
+ * observer reapplies after React mounts or replaces the row.
  */
 export function installApproveForMeIcon(root: Document = document): () => void {
   enhance(root)

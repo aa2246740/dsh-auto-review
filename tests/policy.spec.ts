@@ -394,7 +394,18 @@ describe('permission mode icon contract', () => {
       APPROVE_FOR_ME_LABEL,
       'Full access',
     ])).toBe(true)
+    expect(isPermissionPresetMenu([
+      '仅可查看',
+      '工作区内修改',
+      APPROVE_FOR_ME_LABEL,
+      '完全权限',
+    ])).toBe(true)
     expect(isPermissionPresetMenu([APPROVE_FOR_ME_LABEL])).toBe(false)
+    expect(isPermissionPresetMenu([
+      '仅可查看',
+      '工作区内修改',
+      '完全权限',
+    ])).toBe(false)
   })
 })
 

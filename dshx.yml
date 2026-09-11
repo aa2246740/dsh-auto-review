@@ -3,3 +3,11 @@ entry: src/dsh-approve-for-me.ts
 marker: "[my-plugins/dsh-approve-for-me] loaded"
 kind: client
 profile: web
+hotReload:
+  artifacts:
+    - src/dsh-approve-for-me.ts
+    - src/coordinator.ts
+    - src/reviewer.ts
+    - src/policy.ts
+    - src/review-session.ts
+    - lib/dsh-approve-for-me.js
