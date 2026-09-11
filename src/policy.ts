@@ -36,7 +36,7 @@ const WORKSPACE_READ_TOOLS = new Set(['glob', 'grep', 'lsp', 'read', 'read_image
 const SHELL_LIKE_TOOLS = new Set([
   'bash', 'cordis_run', 'pwsh', 'run_code', 'terminal_open', 'terminal_send',
 ])
-const SENSITIVE_PATH = /(?:^|[\\/])(?:\.env(?:\.|$)|\.ssh|\.aws|\.gnupg|keychains?|credentials?|secrets?)(?:[\\/]|$)/i
+const SENSITIVE_PATH = /(?:^|[\\/])(?:\.env(?:\.[^\\/]+)?|\.ssh|\.aws|\.gnupg|\.codex[\\/]auth\.json|keychains?|credentials?|secrets?)(?:[\\/]|$)/i
 const BROAD_READ_ROOT = /^(?:\/|~|\$HOME|\$\{HOME\}|\/[Uu]sers\/[^/]+)\/?$/
 const PARENT_PATH_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/
 
@@ -272,7 +272,9 @@ function safeObservationPath(path: string, cwd: string | undefined): boolean {
   if (path.length === 0 || SENSITIVE_PATH.test(path) || BROAD_READ_ROOT.test(path)
     || PARENT_PATH_SEGMENT.test(path)) return false
   if ((path === '.' || path.startsWith('./') || !path.startsWith('/')) && cwd !== undefined) {
-    return !SENSITIVE_PATH.test(cwd) && !BROAD_READ_ROOT.test(cwd)
+    return !SENSITIVE_PATH.test(cwd)
+      && !SENSITIVE_PATH.test(`${cwd}/${path}`)
+      && !BROAD_READ_ROOT.test(cwd)
   }
   return true
 }

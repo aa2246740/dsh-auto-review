@@ -198,10 +198,20 @@ function textFromLatestUserRequests(agent: Agent, maxChars: number): string[] {
   return requests.reverse()
 }
 
-function textFromTrustedDeveloperInstructions(agent: Agent, maxChars: number): string[] {
-  const system = agent.session.requestHeader()?.system?.trim()
-  if (system === undefined || system.length === 0) return []
-  return [redactText(system).slice(0, maxChars)]
+function textFromLatestSystemMessage(agent: Agent, maxChars: number): string[] {
+  const events = agent.session.snapshotEvents()
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]!
+    if (event.type !== 'system/message') continue
+    const text = event.data.message.content
+      .filter((block): block is Extract<(typeof event.data.message.content)[number], { type: 'text' }> => block.type === 'text')
+      .map(block => block.text)
+      .join('\n')
+      .trim()
+    if (text.length === 0) return []
+    return [redactText(text).slice(0, maxChars)]
+  }
+  return []
 }
 
 function successfulToolResults(agent: Agent): Map<ToolCallId, unknown> {
@@ -258,8 +268,8 @@ function trustedAuthorizationVersion(agent: Agent | undefined): string {
       versionParts.push(['user', event.data.content])
       continue
     }
-    if (event.type === 'request/header') {
-      versionParts.push(['header', event.data.header.system ?? null])
+    if (event.type === 'system/message') {
+      versionParts.push(['system', event.data.message.content])
       continue
     }
     if (event.type === 'session/end-seed') {
@@ -570,7 +580,7 @@ export class ApprovalReviewer {
         : textFromLatestUserRequests(exec.agent, recentBudget),
       trustedDeveloperInstructions: exec.agent === undefined
         ? []
-        : textFromTrustedDeveloperInstructions(exec.agent, developerBudget),
+        : textFromLatestSystemMessage(exec.agent, developerBudget),
       trustedUserResponses: exec.agent === undefined
         ? []
         : trustedUserResponses(exec.agent, userResponseBudget),

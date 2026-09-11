@@ -1,45 +1,46 @@
 {
-  "extends": "../../tsconfig.base.client.json",
+  "extends": "../../runtime/tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    "types": ["client-build-environment", "node"]
   },
   "include": [
     "src"
   ],
   "references": [
     {
-      "path": "../../vendor/cordis"
+      "path": "../../runtime/vendor/cordis"
     },
     {
-      "path": "../../vendor/schemastery"
+      "path": "../../runtime/vendor/schemastery"
     },
     {
-      "path": "../../packages/settings/settings"
+      "path": "../../runtime/packages/settings/settings"
     },
     {
-      "path": "../../packages/core/agent"
+      "path": "../../runtime/packages/core/agent"
     },
     {
-      "path": "../../packages/core/tools"
+      "path": "../../runtime/packages/core/tools"
     },
     {
-      "path": "../../packages/interaction/user-approval"
+      "path": "../../runtime/packages/interaction/user-approval"
     },
     {
-      "path": "../../packages/llm/llm"
+      "path": "../../runtime/packages/llm/llm"
     },
     {
-      "path": "../../packages/api/remotes/tsconfig.client.json"
+      "path": "../../runtime/packages/api/remotes/tsconfig.client.json"
     },
     {
-      "path": "../../packages/client/ui-settings"
+      "path": "../../runtime/packages/client/ui-settings"
     },
     {
-      "path": "../../packages/client/ui-renderer"
+      "path": "../../runtime/packages/client/ui-renderer"
     },
     {
-      "path": "../../packages/client/ui-settings-plugins"
+      "path": "../../runtime/packages/client/ui-settings-plugins"
     }
   ]
 }
