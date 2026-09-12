@@ -2,11 +2,19 @@
 
 # 替我审批
 
+```sh
+dsh plugin --profile web add github:aa2246740/dsh-auto-review
+```
+
+这条命令走官方 `dsh plugin add`：它在 `$DSH_HOME/profiles/web` 里调用 [pnpm](https://pnpm.io)，所以 PATH 上要有 `pnpm`。没有 `dsh` 时用 `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`。装完**重启这个 Host，再刷新页面**。`add` 只写 profile，不会热挂正在跑的进程。
+
+仓库已提交编好的 `lib/`，并声明 `dsh.bundle.patch`。面向 DeepSeek Harness **0.1.5-rc.2** 的 stock 用户：不要走 Creator Mode，也不需要再 clone 一份插件目录。
+
+Loader id：`dsh-approve-for-me`。仓库名是 `dsh-auto-review`，已有安装不用改名。
+
 DeepSeek Harness 跑工具前会按权限策略决定是否询问。这个插件在权限菜单里加一档 **Approve for me**：沙箱仍是 Workspace Write。已经被 DSH 直接放行的调用不会送审。真正需要审批的调用交给你在 DSH 里指定的独立审批模型。
 
 能严格证明安全的本地观察可以快速放行。整盘删除这类操作在本地拒绝。模型不可用、超时、输出不合规或缺少原始调用上下文时直接失败关闭，不再退回人工审批。
-
-仓库名是 `dsh-auto-review`，插件 ID 仍是 `dsh-approve-for-me`。已有安装不用改名。
 
 ![替我审批设置卡](docs/screenshots/settings-card.png)
 
@@ -22,30 +30,20 @@ DeepSeek Harness 跑工具前会按权限策略决定是否询问。这个插件
 
 ![安全边界与高级参数](docs/screenshots/settings-advanced.png)
 
-输入框选中 **Approve for me** 后，插件只给这一档补盾牌星标。另外三种官方模式不变。
+输入框选中 **Approve for me** 后，插件只给这一档补盾牌星标。另外三种官方模式不变。装好后在输入框权限菜单选 **Approve for me**，再到插件设置里选审批模型。不要再通过另一份 bundle 或 patch 重复挂载。
 
-## 安装
-
-Loader id：`dsh-approve-for-me`。
-
-```sh
-dsh plugin --profile web add github:aa2246740/dsh-auto-review
-```
-
-或本地 clone：
+本地 clone 时同样用官方 CLI（仍需要 pnpm）：
 
 ```sh
 git clone https://github.com/aa2246740/dsh-auto-review.git
 dsh plugin --profile web add ./dsh-auto-review
 ```
 
-然后重启这个 DSH Host，刷新页面。装好后在输入框权限菜单选 **Approve for me**，再到插件设置里选审批模型。不要再通过另一份 bundle 或 patch 重复挂载。
-
 ```sh
 dsh plugin --profile web remove dsh-approve-for-me
 ```
 
-需要 DeepSeek Harness `v0.1.0-rc.8`、Node `^22.19.0` 或 `>=24`、至少一个可用的 DSH 模型。API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login) 都可以。
+需要 DeepSeek Harness `0.1.5-rc.2`、Node `^22.19.0` 或 `>=24`、至少一个可用的 DSH 模型。API key 或 [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login) 都可以。
 
 ## 怎么判
 
@@ -64,15 +62,12 @@ dsh plugin --profile web remove dsh-approve-for-me
 
 ## 开发
 
-仓库放在 RC8 检出的 `my-plugins/dsh-approve-for-me` 下。
-
 ```sh
 pnpm install --ignore-workspace
 pnpm test
-pnpm run typecheck
-pnpm run build
-dshx check dsh-approve-for-me
 ```
+
+`dsh plugin add github:` 加载的是仓库里的 `lib/`。改源码后重新构建并一起提交 `lib/`。
 
 ## 许可
 
