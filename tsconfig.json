@@ -1,46 +1,29 @@
 {
-  "extends": "../../runtime/tsconfig.base.client.json",
   "compilerOptions": {
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "rootDir": "src",
     "outDir": "lib/types",
-    "types": ["client-build-environment", "node"]
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": [],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": [
     "src"
-  ],
-  "references": [
-    {
-      "path": "../../runtime/vendor/cordis"
-    },
-    {
-      "path": "../../runtime/vendor/schemastery"
-    },
-    {
-      "path": "../../runtime/packages/settings/settings"
-    },
-    {
-      "path": "../../runtime/packages/core/agent"
-    },
-    {
-      "path": "../../runtime/packages/core/tools"
-    },
-    {
-      "path": "../../runtime/packages/interaction/user-approval"
-    },
-    {
-      "path": "../../runtime/packages/llm/llm"
-    },
-    {
-      "path": "../../runtime/packages/api/remotes/tsconfig.client.json"
-    },
-    {
-      "path": "../../runtime/packages/client/ui-settings"
-    },
-    {
-      "path": "../../runtime/packages/client/ui-renderer"
-    },
-    {
-      "path": "../../runtime/packages/client/ui-settings-plugins"
-    }
   ]
 }
