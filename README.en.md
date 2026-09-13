@@ -2,11 +2,19 @@
 
 # Approve for me
 
+```sh
+dsh plugin --profile web add github:aa2246740/dsh-auto-review
+```
+
+That is official `dsh plugin add`. It runs [pnpm](https://pnpm.io) inside `$DSH_HOME/profiles/web`, so `pnpm` must be on `PATH`. If `dsh` is not installed, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`. Then **restart that Host and reload the page**. `add` writes the profile; it does not hot-load a running process.
+
+This repo ships built `lib/` and declares `dsh.bundle.patch`. For stock DeepSeek Harness **0.1.5-rc.2** that is the whole install. You do not need Creator Mode, and you do not need a second plugin checkout.
+
+Loader id: `dsh-approve-for-me`. The GitHub repo is `dsh-auto-review`. Existing installs do not need a rename.
+
 DeepSeek Harness asks before some tool calls. This plugin adds **Approve for me** to the permission menu. The sandbox stays Workspace Write. Calls DSH already allows are not sent for review. Calls that still need approval go to a separate review model you pick in DSH.
 
 Local observation that can be proved safe is allowed quickly. Destructive cases such as wiping a whole disk are denied locally. If the model is down, times out, returns junk, or lacks the original call context, the plugin fails closed. It does not fall back to a human prompt.
-
-The GitHub repo is `dsh-auto-review`. The plugin id stays `dsh-approve-for-me`. Existing installs do not need a rename.
 
 ![Approve for me settings card](docs/screenshots/settings-card.png)
 
@@ -22,28 +30,20 @@ The GitHub repo is `dsh-auto-review`. The plugin id stays `dsh-approve-for-me`. 
 
 ![Safety limits and advanced settings](docs/screenshots/settings-advanced.png)
 
-## Install
+After install, pick **Approve for me** in the composer permission menu, then choose the review model in plugin settings. The plugin only adds the shield-star glyph to that row. The three official modes stay as they are. Do not mount a second copy through another bundle or patch.
 
-Loader id: `dsh-approve-for-me`.
-
-```sh
-dsh plugin --profile web add github:aa2246740/dsh-auto-review
-```
-
-Or from a clone:
+From a local clone, still use the official CLI (pnpm required):
 
 ```sh
 git clone https://github.com/aa2246740/dsh-auto-review.git
 dsh plugin --profile web add ./dsh-auto-review
 ```
 
-Then restart that DSH Host and reload the page. Pick **Approve for me** in the composer permission menu, then choose the review model in plugin settings. Do not mount a second copy through another bundle or patch.
-
 ```sh
 dsh plugin --profile web remove dsh-approve-for-me
 ```
 
-Needs DeepSeek Harness `v0.1.0-rc.8`, Node `^22.19.0` or `>=24`, and at least one working DSH model. An API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login) is enough.
+Needs DeepSeek Harness `0.1.5-rc.2`, Node `^22.19.0` or `>=24`, and at least one working DSH model. An API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login) is enough.
 
 ## How it decides
 
@@ -62,15 +62,12 @@ See [SECURITY.md](SECURITY.md).
 
 ## Develop
 
-Keep the checkout at `my-plugins/dsh-approve-for-me` on an RC8 Harness tree.
-
 ```sh
 pnpm install --ignore-workspace
 pnpm test
-pnpm run typecheck
-pnpm run build
-dshx check dsh-approve-for-me
 ```
+
+`dsh plugin add github:` loads the committed `lib/`. Rebuild and commit `lib/` together when you change source.
 
 ## License
 
