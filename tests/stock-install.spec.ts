@@ -34,9 +34,10 @@ describe('stock DSH 0.1.5-rc.2 install', () => {
     expect(read('lib/dsh-approve-for-me.js')).toContain('export {')
     const client = read('lib/client.js')
     expect(client).toContain('window.__ModuleLoader__.load')
-    expect(client).toContain('仅可查看')
-    expect(client).toContain('工作区内修改')
-    expect(client).toContain('完全权限')
+    expect(client).toContain('dsh-approve-for-me')
+    // The current client uses public settings slots instead of decorating permission DOM.
+    expect(client).toContain('settings.section')
+    expect(client).toContain('settings.plugin.item')
   })
 
   it('leads both READMEs with the official web-profile one-liner and pnpm', () => {

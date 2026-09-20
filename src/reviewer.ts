@@ -1,6 +1,9 @@
 /** Unified DSH model selection, bounded context framing, and strict decision parsing. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { abortable } from './abort.ts'
+import { redactArguments, redactText } from './redaction.ts'
+export { redactArguments } from './redaction.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import {
   BlockAssembler,
@@ -39,12 +42,16 @@ export type ReviewDecision =
       riskLevel: ReviewRiskLevel
       userAuthorization: ReviewUserAuthorization
       reason: string
+      /** Actual resolved provider/model, never inferred by the UI. */
+      model?: string
     }
   | {
       source: 'failure'
       decision: 'deny'
       failureKind: ReviewFailureKind
       reason: string
+      /** Actual resolved provider/model, never inferred by the UI. */
+      model?: string
     }
 
 /** Completed prior tool evidence; never treated as direct user authority. */
@@ -134,27 +141,8 @@ Outcome policy:
 - The downstream ask is evidence of a technical approval seam, not evidence that the action is dangerous.
 - Never invent user consent.`
 
-const SECRET_KEY = /(?:password|passwd|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i
-const INLINE_SECRET = /\b((?:bearer|token|password|secret|api[_-]?key|authorization)\s*[:=]\s*)([^\s,;]+)/gi
-
 function safeMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function redactText(text: string): string {
-  return text.replace(INLINE_SECRET, '$1[REDACTED]')
-}
-
-/** Redact credential-shaped fields before a fixed reviewer route can cross providers. */
-export function redactArguments(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactArguments)
-  if (typeof value === 'string') return redactText(value)
-  if (typeof value !== 'object' || value === null) return value
-  const output: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    output[key] = SECRET_KEY.test(key) ? '[REDACTED]' : redactArguments(item)
-  }
-  return output
+  return redactText(error instanceof Error ? error.message : String(error)).slice(0, 600)
 }
 
 /** Parse the atomic `[provider, model]` setting. */
@@ -485,6 +473,7 @@ function failureDecision(
     decision: 'deny',
     failureKind,
     reason: `自动审批未能安全完成${attribution}：${message}`,
+    ...route === undefined ? {} : { model: `${route.provider}/${route.model}` },
   }
 }
 
@@ -506,8 +495,8 @@ function routeLabel(route: ReviewerRoute): string {
 }
 
 class ReviewerDeadlineExceeded extends Error {
-  constructor(route: ReviewerRoute, readonly timeoutMs: number) {
-    super(`${routeLabel(route)} 审批响应超过 ${humanDuration(timeoutMs)}`)
+  constructor(route: ReviewerRoute | undefined, readonly timeoutMs: number) {
+    super(`${route === undefined ? '审批模型解析' : routeLabel(route)} 超过总审核期限 ${humanDuration(timeoutMs)}`)
     this.name = 'ReviewerDeadlineExceeded'
   }
 }
@@ -594,85 +583,62 @@ export class ApprovalReviewer {
     }
   }
 
-  /** Review one action; timeout, transport, and malformed-output failures fail closed. */
+  /** One total deadline includes route resolution, provider stalls and all retries. */
   async review(subject: ReviewSubject, parentSignal?: AbortSignal): Promise<ReviewDecision> {
     let requestedRoute: ReviewerRoute | undefined
     let sessionLease: ReviewSessionLease | undefined
+    const settings = this.settings()
+    const timeoutMs = settings.timeoutMs ?? 90_000
+    const retries = settings.transportRetries ?? 2
+    const deadlineAt = Date.now() + timeoutMs
+    const controller = new AbortController()
+    const abort = (): void => controller.abort(parentSignal?.reason)
+    if (parentSignal?.aborted === true) abort()
+    else parentSignal?.addEventListener('abort', abort, { once: true })
+    const timeout = setTimeout(() => controller.abort(new ReviewerDeadlineExceeded(requestedRoute, timeoutMs)), timeoutMs)
     try {
-      const settings = this.settings()
-      const route = await this.resolveRoute(subject, parentSignal)
+      const route = await abortable(controller.signal, () => this.resolveRoute(subject, controller.signal))
       requestedRoute = route
       const input = reviewInput(subject, settings.maxInputChars ?? 20_000)
-      const lease = this.sessions.acquire(
-        subject.agent,
-        route,
-        trustedAuthorizationVersion(subject.agent),
-        {
-          maxPairs: settings.reviewHistoryPairs ?? DEFAULT_REVIEW_HISTORY_PAIRS,
-          maxChars: settings.reviewHistoryChars ?? DEFAULT_REVIEW_HISTORY_CHARS,
-        },
-      )
+      const lease = this.sessions.acquire(subject.agent, route, trustedAuthorizationVersion(subject.agent), {
+        maxPairs: settings.reviewHistoryPairs ?? DEFAULT_REVIEW_HISTORY_PAIRS,
+        maxChars: settings.reviewHistoryChars ?? DEFAULT_REVIEW_HISTORY_CHARS,
+      })
       sessionLease = lease
-      const timeoutMs = settings.timeoutMs ?? 90_000
-      const retries = settings.transportRetries ?? 2
-      const deadlineAt = Date.now() + timeoutMs
       for (let attempt = 0; ; attempt += 1) {
-        const remainingMs = deadlineAt - Date.now()
-        if (remainingMs <= 0) throw new ReviewerDeadlineExceeded(route, timeoutMs)
-
-        const controller = new AbortController()
-        const abort = (): void => controller.abort(parentSignal?.reason)
-        if (parentSignal?.aborted === true) abort()
-        else parentSignal?.addEventListener('abort', abort, { once: true })
-        const deadline = new ReviewerDeadlineExceeded(route, timeoutMs)
-        const timeout = setTimeout(() => controller.abort(deadline), remainingMs)
+        if (Date.now() >= deadlineAt) throw new ReviewerDeadlineExceeded(route, timeoutMs)
         const telemetry: ReviewAttemptTelemetry = { startedAt: Date.now(), chunks: 0 }
         let result = 'error'
         try {
-          const assessment = await this.runAttempt(
-            route,
-            lease.priorMessages,
-            input,
-            settings.maxOutputTokens ?? 256,
-            controller.signal,
-            telemetry,
-          )
+          const assessment = await abortable(controller.signal, () => this.runAttempt(
+            route, lease.priorMessages, input, settings.maxOutputTokens ?? 256, controller.signal, telemetry,
+          ))
+          if (controller.signal.aborted) throw controller.signal.reason
+          if (Date.now() >= deadlineAt) throw new ReviewerDeadlineExceeded(route, timeoutMs)
           result = assessment.decision.decision
           lease.commit(input, assessment.responseText)
-          return assessment.decision
+          return { ...assessment.decision, model: `${route.provider}/${route.model}` }
         } catch (rawError: unknown) {
-          const error = controller.signal.aborted && controller.signal.reason instanceof ReviewerDeadlineExceeded
-            ? controller.signal.reason
-            : rawError
-          result = error instanceof ReviewerDeadlineExceeded
-            ? 'timeout'
-            : error instanceof ReviewAttemptFailure ? error.code : 'error'
-          if (!retryableReviewFailure(error)
-            || attempt >= retries
-            || parentSignal?.aborted === true) throw error
-          this.ctx.logger.info(
-            `dsh-approve-for-me: retrying reviewer attempt ${String(attempt + 2)}/${String(retries + 1)} after ${result}`,
-          )
-          await waitForRetry(
-            Math.min(100 * (2 ** attempt), Math.max(0, deadlineAt - Date.now())),
-            parentSignal,
-          )
+          const error: unknown = controller.signal.aborted ? controller.signal.reason : rawError
+          result = error instanceof ReviewerDeadlineExceeded ? 'timeout' : error instanceof ReviewAttemptFailure ? error.code : 'error'
+          if (!retryableReviewFailure(error) || attempt >= retries || controller.signal.aborted) throw error
+          const retryDelay = 100 * (2 ** attempt)
+          const remaining = Math.max(0, deadlineAt - Date.now())
+          await waitForRetry(Math.min(retryDelay, remaining), controller.signal)
+          if (retryDelay >= remaining || Date.now() >= deadlineAt) throw new ReviewerDeadlineExceeded(route, timeoutMs)
+          this.ctx.logger.info(`dsh-approve-for-me: retrying reviewer attempt ${String(attempt + 2)}/${String(retries + 1)} after ${result}`)
         } finally {
-          clearTimeout(timeout)
-          parentSignal?.removeEventListener('abort', abort)
           const elapsedMs = Date.now() - telemetry.startedAt
-          const firstChunkMs = telemetry.firstChunkAt === undefined
-            ? 'none'
-            : String(telemetry.firstChunkAt - telemetry.startedAt)
-          this.ctx.logger.info(
-            `dsh-approve-for-me: reviewer ${route.provider}/${route.model} session=${lease.ephemeral ? 'ephemeral' : 'reused'} attempt ${String(attempt + 1)}/${String(retries + 1)} result=${result} elapsedMs=${String(elapsedMs)} firstChunkMs=${firstChunkMs} chunks=${String(telemetry.chunks)}`,
-          )
+          const firstChunkMs = telemetry.firstChunkAt === undefined ? 'none' : String(telemetry.firstChunkAt - telemetry.startedAt)
+          this.ctx.logger.info(`dsh-approve-for-me: reviewer ${route.provider}/${route.model} session=${lease.ephemeral ? 'ephemeral' : 'reused'} attempt ${String(attempt + 1)}/${String(retries + 1)} result=${result} elapsedMs=${String(elapsedMs)} firstChunkMs=${firstChunkMs} chunks=${String(telemetry.chunks)}`)
         }
       }
     } catch (error: unknown) {
       if (parentSignal?.aborted === true) throw error
       return failureDecision(safeMessage(error), reviewFailureKind(error, requestedRoute), requestedRoute)
     } finally {
+      clearTimeout(timeout)
+      parentSignal?.removeEventListener('abort', abort)
       sessionLease?.release()
     }
   }
@@ -711,6 +677,7 @@ export class ApprovalReviewer {
       maxTokens: maxOutputTokens,
       signal,
     })) {
+      if (signal.aborted) throw signal.reason ?? new Error('review cancelled')
       telemetry.firstChunkAt ??= Date.now()
       telemetry.chunks += 1
       assembler.push(chunk)

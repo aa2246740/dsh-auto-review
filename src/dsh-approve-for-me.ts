@@ -1,11 +1,22 @@
+import { homedir } from 'node:os'
+import { join, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import type { ApprovalSettings } from './contracts.ts'
+import { ApprovalAuditStore } from './audit.ts'
+import { installApprovalApi } from './api.ts'
+import { argumentFingerprint, targetPlugin } from './approval-context.ts'
+import { matchRules } from './rules.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
-import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { PreToolDecision } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
-import { AutoReviewCoordinator } from './coordinator.ts'
+import { AutoReviewCoordinator, registerCoordinatorPolicyEvents } from './coordinator.ts'
 import { ApprovalReviewer } from './reviewer.ts'
+import { CreatorGrantStore } from './creator-grants.ts'
+import { createCreatorAuthorizerHost } from './creator-authorizer-host.ts'
+import { creatorExecutionAudit } from './creator-execution-audit.ts'
+import { installCreatorConsentApi } from './creator-consent-api.ts'
 import {
   DEFAULT_REVIEW_HISTORY_CHARS,
   DEFAULT_REVIEW_HISTORY_PAIRS,
@@ -21,7 +32,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export const name = 'dsh-approve-for-me'
-export const inject = ['tools', 'llm', 'approval', 'permissionPresets', 'settings']
+export const inject = ['tools', 'llm', 'approval', 'permissionPresets', 'settings', 'connection']
 
 /** Permission-preset key that delegates approval requests to this reviewer. */
 export const APPROVE_FOR_ME_PRESET = 'approve-for-me'
@@ -30,7 +41,7 @@ export const APPROVE_FOR_ME_PRESET = 'approve-for-me'
 export const APPROVE_FOR_ME_SETTINGS_NAMESPACE = 'dsh-approve-for-me'
 
 /** User-owned reviewer settings. */
-export interface ReviewerSettings {
+export interface ReviewerSettings extends ApprovalSettings {
   /** Whether the reviewer participates in approval waterfalls. */
   enabled?: boolean
   /** Follow the current agent route, or use one explicit registered DSH route. */
@@ -58,6 +69,9 @@ export type Config = ReviewerSettings
 /** Composition and durable settings schema. */
 export const Config: z<ReviewerSettings> = z.object({
   enabled: z.boolean().default(true),
+  failureMode: z.union(['human', 'reject'] as const).default('human'),
+  historyRetentionDays: z.number().step(1).min(1).max(365).default(30),
+  historyMaxRecords: z.number().step(1).min(100).max(10_000).default(1_000),
   modelMode: z.union(['follow-agent', 'fixed'] as const).default('follow-agent'),
   reviewerRoute: z.string().default(''),
   reasoningMode: z.union(['low', 'provider-default'] as const).default('low'),
@@ -79,6 +93,11 @@ export function reviewerModeActive(
     && ctx.permissionPresets.current(agent.session) === APPROVE_FOR_ME_PRESET
 }
 
+/** The public override intentionally omits the deployment default; include both before any fast path. */
+export function canRequestApproval(ctx: Context, agent: Agent): boolean {
+  return (ctx.approval.overrideOf(agent.session) ?? ctx.approval.config.policy ?? 'ask') === 'ask'
+}
+
 /** Install approval-only Auto-review without changing DSH core policy or tool definitions. */
 export function apply(ctx: Context, config: Config): void {
   ctx.logger.info('[my-plugins/dsh-approve-for-me] loaded')
@@ -90,10 +109,58 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   const reviewer = new ApprovalReviewer(ctx, source)
+  const configuredHome: unknown = Reflect.get(process.env, 'DSH_HOME')
+  const directory = join(typeof configuredHome === 'string' && configuredHome.length > 0 ? configuredHome : join(homedir(), '.dsh'), 'approve-for-me')
+  const audit = new ApprovalAuditStore(directory, source)
   const coordinator = new AutoReviewCoordinator(
     reviewer,
     agent => reviewerModeActive(ctx, agent, source()),
+    {
+      failureMode: () => source().failureMode ?? 'human',
+      canAsk: agent => canRequestApproval(ctx, agent),
+      audit,
+      rule: (exec, stage) => matchRules(audit.rules(), {
+        sessionId: String(exec.agent?.session.header.id ?? 'unbound'),
+        stage, toolName: exec.name, argumentFingerprint: argumentFingerprint(exec.arguments),
+        ...targetPlugin(exec.name, exec.arguments) === undefined ? {} : { pluginId: targetPlugin(exec.name, exec.arguments)! },
+        sourceVerified: false, // No public execution-bound tool provenance capability in this Host.
+        permissionRaised: stage === 'approval-request',
+        policyNever: exec.agent !== undefined && !canRequestApproval(ctx, exec.agent),
+        now: Date.now(),
+      }),
+    },
   )
+  installApprovalApi(ctx, audit)
+  const grants = new CreatorGrantStore({ directory, isCurrentOwner: () => true })
+  const authorizerHost = createCreatorAuthorizerHost(ctx, {
+    store: grants,
+    isCurrentOwner: () => source().enabled !== false,
+    audit: creatorExecutionAudit(directory),
+  })
+  installCreatorConsentApi(ctx, authorizerHost)
+  if (typeof ctx.provide === 'function') {
+    ctx.provide('creatorAuthorizer', Object.freeze({
+      protocol: 'creator-authorizer-host-v1',
+      createAuthorizer: authorizerHost.createAuthorizer,
+    }))
+  }
+  ctx.effect(() => () => {
+    coordinator.dispose(); audit.dispose(); authorizerHost.dispose(); grants.dispose()
+  }, 'approve-for-me: cancel pending reviews and close audit/grant stores')
+  registerCoordinatorPolicyEvents(ctx, coordinator)
+  ctx.tools.guard(exec => {
+    if (exec.agent === undefined || !reviewerModeActive(ctx, exec.agent, source()) || !['write', 'edit'].includes(exec.name)) return undefined
+    const args = exec.arguments !== null && typeof exec.arguments === 'object' && !Array.isArray(exec.arguments)
+      ? exec.arguments as Record<string, unknown> : undefined
+    const path = args?.['file_path'] ?? args?.['path']
+    if (typeof path !== 'string') return undefined
+    const cwd = exec.agent.session.header.cwd
+    if (cwd === undefined) return undefined
+    const absolute = resolve(cwd, path)
+    const protectedRoot = resolve(directory)
+    return absolute === protectedRoot || absolute.startsWith(`${protectedRoot}${sep}`)
+      ? '审批规则与审核存储只能通过用户审批管理页面修改，不能由模型自行改写。' : undefined
+  })
 
   ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
     const downstream = await next()
@@ -105,7 +172,7 @@ export function apply(ctx: Context, config: Config): void {
     next,
   ): Promise<ApprovalOutcome> => coordinator.approvalRequest(request, next), { prepend: true })
 
-  ctx.on('tools/result', (exec: Readonly<ToolExecution>) => {
-    coordinator.toolResult(exec)
+  ctx.on('tools/result', (exec, result) => {
+    coordinator.toolResult(exec, result)
   })
 }

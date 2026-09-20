@@ -10,4 +10,19 @@ hotReload:
     - src/reviewer.ts
     - src/policy.ts
     - src/review-session.ts
+    - src/abort.ts
+    - src/redaction.ts
+    - src/contracts.ts
+    - src/approval-context.ts
+    - src/audit.ts
+    - src/api.ts
+    - src/rules.ts
+    - src/creator-grant-types.ts
+    - src/creator-grants.ts
+    - src/creator-approval-contract.ts
+    - src/creator-authorizer.ts
+    - src/creator-consent.ts
+    - src/creator-authorizer-host.ts
+    - src/creator-execution-audit.ts
+    - src/creator-consent-api.ts
     - lib/dsh-approve-for-me.js

@@ -39,12 +39,51 @@ configured DSH provider; the browser half reads only the unified model catalog.
 Prior reviewer messages are reused only while the parent agent's trusted-
 authorization version is unchanged.
 
-While **Approve for me** is active, covered approval requests do not fall through
-to the human answerer. Missing correlation, unavailable models, timeout,
-transport exhaustion, malformed output, and other reviewer failures reject the
-request. Parent cancellation remains cancellation rather than a denial.
+While **Approve for me** is active, review failures default to the official human
+approval waterfall. This pauses the action: an unavailable, rejected or cancelled
+human outcome never grants execution. Strict reject remains optional. A known
+catastrophic, rule or model denial is never downgraded by audit-storage failure.
+The effective approval policy includes both the session override and deployment
+default; `never` is checked before fast paths and after awaited decisions.
+Parent cancellation and plugin disposal invalidate late results.
 
-Reviewer allows are one-shot. The plugin does not create persistent rules or
-model-owned "allow always" grants. Repeated explicit denials stop the current
-turn after three consecutive denials or ten denials in the last fifty reviews
-under the same direct user request.
+Each native ask is independent, including callers that reuse a borrowed request
+object. Simultaneous execution/call-ID collisions are treated as ambiguous and
+cannot supply guessed arguments to automatic review. A pre-execute failure may
+hand off only its exact pending ask; a later escalation needs a fresh decision.
+Audit execution updates use the original execution object's association, not a
+call-ID-only match. A Host/HMR boundary cannot reconstruct an old grant.
+
+Saved rules require explicit authenticated management requests, exact bounded
+identity, optimistic revisions and expiration within 30 days. There is no model
+tool that creates an allow-always rule. Current saved-rule **allow fast paths are
+disabled**: the public tool protocol does not authenticate registration ownership
+and eventual execution binding. A name, schema or prose is not that proof.
+Human-required and deny rules work; previews never run tools. Independent AI
+review remains active for registered tools and is not represented by the saved-
+rule capability flags. Ordinary Creator's separate client activation is not
+automatically intercepted.
+
+The management route is installed only through authenticated public
+`connection.fetch`. Connection applies its Host/Origin/authentication fence
+before its HTTP bridge creates the synthetic `dsh.internal` Request URL. The
+plugin checks the real carrier authority plus a same-origin UI intent header;
+that header is CSRF defense in depth, not proof that the caller is a human.
+
+The plugin-owned bounded store uses atomic replacement and restrictive file
+permissions, rejects symlink paths and invalid persisted schemas, and exposes
+storage faults rather than silently granting. It keeps bounded/redacted metadata,
+not full executable payloads or hidden model reasoning. Known credential patterns
+are removed from prompts as well as audit/export fields, but arbitrary secrets
+cannot be detected reliably. Inspect exports before sharing. Power-loss durability
+and hostile same-UID programs are not guaranteed by these snapshots.
+
+A guard rejects direct write/edit attempts against this store while reviewer mode
+is active. This is not a filesystem-integrity sandbox: arbitrary same-user shell
+code, installed Host plugins, Full access, compromised browser code or manually
+edited files remain outside that guard's guarantee. No change here widens DSH's
+sandbox or claims to contain arbitrary plugin code.
+
+Repeated explicit denials stop the current turn after three consecutive denials
+or ten in the last fifty reviews under the same direct user request. Reviewer
+outages and human unavailability are not counted as safety-denial attempts.

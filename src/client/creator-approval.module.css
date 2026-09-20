@@ -1,0 +1,67 @@
+.root {
+  --creator-confirm-border: color-mix(in srgb, currentColor 16%, transparent);
+  --creator-confirm-muted: color-mix(in srgb, currentColor 68%, transparent);
+  --creator-confirm-fill: color-mix(in srgb, currentColor 3%, transparent);
+  --creator-confirm-accent: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #3568d4);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 760px;
+  padding: 16px;
+  border: 1px solid var(--creator-confirm-border);
+  border-radius: 12px;
+  background: var(--creator-confirm-fill);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.root *, .root *::before, .root *::after { box-sizing: border-box; }
+.heading, .actions, .footer, .duration { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.heading { justify-content: space-between; margin-bottom: 4px; }
+.heading h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.badge { padding: 2px 7px; border-radius: 5px; background: var(--creator-confirm-fill); font-size: 11px; }
+.plugin { display: block; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+.target, .summary { display: grid; gap: 3px; margin: 8px 0 12px; }
+.target > div, .summary > div { display: grid; grid-template-columns: minmax(65px, auto) minmax(0, 1fr); gap: 10px; }
+.target dt, .summary dt { color: var(--creator-confirm-muted); }
+.target dd, .summary dd { margin: 0; min-width: 0; }
+.fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
+.fieldset legend { margin-bottom: 6px; padding: 0; font-weight: 500; }
+.lifetimes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.choice { display: flex; align-items: flex-start; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--creator-confirm-border); border-radius: 7px; cursor: pointer; }
+.choice:has(input:checked) { background: color-mix(in srgb, var(--creator-confirm-accent) 7%, transparent); border-color: var(--creator-confirm-accent); }
+.choice:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.choice input, .operations input, .acknowledgement input { flex: 0 0 auto; margin: 3px 0 0; accent-color: var(--creator-confirm-accent); }
+.hint, .task { margin: 7px 0; color: var(--creator-confirm-muted); font-size: 12px; }
+.task { color: inherit; }
+.details { margin: 8px 0; }
+.details summary { cursor: pointer; font-size: 12px; color: var(--creator-confirm-muted); }
+.operations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; padding: 9px 0 4px; }
+.operations label, .acknowledgement { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
+.operations small { color: var(--creator-confirm-muted); font-size: 11px; }
+.duration { margin-top: 9px; font-size: 12px; }
+.duration select { color: inherit; background: transparent; border: 1px solid var(--creator-confirm-border); border-radius: 5px; padding: 4px 7px; font: inherit; }
+.actions { justify-content: flex-end; margin-top: 12px; }
+.primary, .secondary { min-height: 33px; padding: 6px 12px; border-radius: 7px; font: inherit; cursor: pointer; }
+.primary { color: #fff; background: var(--creator-confirm-accent); border: 1px solid var(--creator-confirm-accent); }
+.secondary { color: inherit; background: transparent; border: 1px solid var(--creator-confirm-border); }
+.root button:disabled, .root fieldset:disabled { opacity: .6; cursor: not-allowed; }
+.root :is(button, input, select, summary):focus-visible { outline: 2px solid var(--creator-confirm-accent); outline-offset: 3px; }
+.confirmation { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--creator-confirm-accent) 55%, transparent); border-radius: 8px; background: var(--creator-confirm-fill); }
+.confirmation h4 { margin: 0 0 6px; font-size: 13px; }
+.confirmation p { margin: 0 0 8px; }
+.acknowledgement { padding-top: 5px; font-weight: 500; }
+.footer { justify-content: space-between; margin-top: 10px; color: var(--creator-confirm-muted); font-size: 11px; }
+.footer button { padding: 0; color: inherit; background: transparent; border: 0; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font: inherit; }
+.reason { font-size: 12px; white-space: pre-wrap; margin: 6px 0 0; }
+.error { margin: 8px 0 0; color: var(--dsw-alias-state-error-primary, #b42332); font-size: 12px; }
+@media (max-width: 480px) {
+  .root { padding: 12px; }
+  .choice { padding: 7px 5px; gap: 4px; font-size: 12px; }
+  .operations { grid-template-columns: minmax(0, 1fr); }
+  .target > div, .summary > div { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .actions > button { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) { .root * { animation: none; transition: none; scroll-behavior: auto; } }

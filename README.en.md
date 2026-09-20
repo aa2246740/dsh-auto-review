@@ -6,68 +6,43 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-That is official `dsh plugin add`. It runs [pnpm](https://pnpm.io) inside `$DSH_HOME/profiles/web`, so `pnpm` must be on `PATH`. If `dsh` is not installed, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`. Then **restart that Host and reload the page**. `add` writes the profile; it does not hot-load a running process.
+Current release: **0.3.0**, based on the locally used version. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
 
-This repo ships built `lib/` and declares `dsh.bundle.patch`. For stock DeepSeek Harness **0.1.5-rc.2** that is the whole install. You do not need Creator Mode, and you do not need a second plugin checkout.
+Requires DeepSeek Harness **0.1.5-rc.2**, Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
 
-Loader id: `dsh-approve-for-me`. The GitHub repo is `dsh-auto-review`. Existing installs do not need a rename.
+Select **Approve for me** in a session's permission menu to review registered tool calls that DSH would otherwise ask about. The sandbox remains Workspace Write. The global enable switch does not identify or activate a session and does not override `never` or grant Full access.
 
-DeepSeek Harness asks before some tool calls. This plugin adds **Approve for me** to the permission menu. The sandbox stays Workspace Write. Calls DSH already allows are not sent for review. Calls that still need approval go to a separate review model you pick in DSH.
+## Features
 
-Local observation that can be proved safe is allowed quickly. Destructive cases such as wiping a whole disk are denied locally. If the model is down, times out, returns junk, or lacks the original call context, the plugin fails closed. It does not fall back to a human prompt.
+- Reviewer outages, timeout, transport failure and invalid output now **pause the action and hand it to the official human approval flow** by default. Missing human availability, rejection and cancellation do not authorize execution. Strict reject remains an advanced setting.
+- The default 90-second deadline includes route lookup, streaming and up to two extra retries. Uncooperative providers and late answers cannot turn an expired review into a grant.
+- Settings → **Automatic approval** provides Overview, Rules, Review history and Advanced, in English and Chinese. Approval and tool-result status are separate; a successful tool result is not deployment or feature acceptance.
+- User-owned rules bind an exact session, tool, stage and argument fingerprint or fixed plugin, with a maximum 30-day lifetime. Human-required and deny rules can be managed, previewed and revoked with optimistic revisions. Rule changes are audited. Preview never executes an action and there is no historical-action replay endpoint.
+- **Saved-rule allow fast paths remain disabled** because the public tool protocol does not authenticate registration ownership and the eventual execution binding. Independent AI review can still evaluate Creator+ registered tools. Ordinary Creator's separate `cordis/request-run` retains its official per-version human approval; future versions are not automatically authorized.
 
-![Approve for me settings card](docs/screenshots/settings-card.png)
+Known security denials, guards and the effective `never` policy cannot be downgraded by audit or reviewer failure. A borrowed request object or reused call ID is not a reusable authorization capability.
 
-![Approve for me permission menu](docs/screenshots/permission-menu.png)
+## History and boundaries
 
-![Allow through deny](docs/screenshots/review-loop.gif)
+New records begin with this version. They are not a complete session log and do not invent retrospective reviewer explanations. The store is `$DSH_HOME/approve-for-me/history-v1.json`, with `~/.dsh` as the default Home. New directories use 0700 and atomic replacement files use 0600. Defaults are 30 days and 1000 records; bounds are 1–365 days and 100–10000 records.
 
-![Allow](docs/screenshots/allow.png)
+Only bounded, redacted metadata and argument summaries are retained; full file/program bodies are omitted. Export includes only the displayed page's allowlisted fields. Redaction is not a guarantee for arbitrary secrets: inspect exports before sharing. Corrupt/unwritable storage is visible, preserves the original file and prevents new automatic grants. Existing safety denials remain denials. Pending approvals are not restored across disposal/HMR.
 
-![Model review pending](docs/screenshots/pending.png)
+This is an approval plugin, not a same-user filesystem or plugin-code integrity sandbox. See [SECURITY.md](SECURITY.md).
 
-![Deny](docs/screenshots/deny.png)
+## Installation and development
 
-![Safety limits and advanced settings](docs/screenshots/settings-advanced.png)
+The plugin ID remains `dsh-approve-for-me`; the repository is `dsh-auto-review`. Install once with the official plugin manager and avoid duplicate bundle/patch mounts. Required public Connection Fetch, locale and SettingsScope package versions are declared in `package.json`; Node is `^22.19.0` or `>=24`.
 
-After install, pick **Approve for me** in the composer permission menu, then choose the review model in plugin settings. The plugin only adds the shield-star glyph to that row. The three official modes stay as they are. Do not mount a second copy through another bundle or patch.
-
-From a local clone, still use the official CLI (pnpm required):
-
-```sh
-git clone https://github.com/aa2246740/dsh-auto-review.git
-dsh plugin --profile web add ./dsh-auto-review
-```
+An existing Creator+ install keeps its original source directory. Build/check, then use controlled same-PID server replacement and the client lifecycle branch. A rebuild, module replacement, client load and actual feature acceptance are separate proofs. Follow DSHX evidence rather than restarting the Host or starting a second port by default.
 
 ```sh
-dsh plugin --profile web remove dsh-approve-for-me
-```
-
-Needs DeepSeek Harness `0.1.5-rc.2`, Node `^22.19.0` or `>=24`, and at least one working DSH model. An API key or [dsh-oauth-login](https://github.com/aa2246740/dsh-oauth-login) is enough.
-
-## How it decides
-
-- Keeps DSH `workspace-write` and `ask`. Does not grant Full access.
-- Only reviews calls DSH would have asked about.
-- Can follow the current Agent model or pin a separate one. Requests `low` reasoning when the model supports it.
-- The fast path is an allowlist: `pwd`, `ls`, bounded `find`, non-sensitive `read` / `grep` / `glob`, and only when they are proved safe.
-- The review model must return `risk_level`, `user_authorization`, `outcome`, and `rationale`. Critical cannot pass. High needs clear user authorization.
-- Each review is independent. The model cannot create always-allow rules.
-- Default budget is 90 seconds, shared with at most two extra tries on transport or format failure.
-- Missing call linkage, a down model, timeout, or bad output all fail closed.
-
-Covers registered tools, Code Mode child calls, and MCP tools that go through the DSH tool runtime. Slash commands, background plugin jobs, Creator activation, Host RPC, and out-of-process subagents are out of scope.
-
-See [SECURITY.md](SECURITY.md).
-
-## Develop
-
-```sh
-pnpm install --ignore-workspace
 pnpm test
+pnpm run typecheck
+pnpm run build
 ```
 
-`dsh plugin add github:` loads the committed `lib/`. Rebuild and commit `lib/` together when you change source.
+Builds use the DSHX external client adapter; see [development setup](docs/development.md) for the target Harness configuration. Old screenshots in `docs/screenshots/` are historical, not acceptance evidence for the new management UI. The client no longer decorates official permission-menu DOM.
 
 ## License
 

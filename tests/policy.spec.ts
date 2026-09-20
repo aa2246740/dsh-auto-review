@@ -343,7 +343,7 @@ describe('auto-review coordinator', () => {
     await expect(outcome).resolves.toBe('cancelled')
   })
 
-  it('fails closed when an approval request has no correlated tool call', async () => {
+  it('delegates missing-context requests to the original human answerer without model approval', async () => {
     const { agent, injections } = agentHarness()
     const { coordinator, reviewed } = coordinatorHarness([])
     let delegated = 0
@@ -355,11 +355,11 @@ describe('auto-review coordinator', () => {
     }, () => {
       delegated += 1
       return Promise.resolve('allowed-once')
-    })).resolves.toBe('rejected')
+    })).resolves.toBe('allowed-once')
 
-    expect(delegated).toBe(0)
+    expect(delegated).toBe(1)
     expect(reviewed).toHaveLength(0)
-    expect(injections).toHaveLength(1)
+    expect(injections).toHaveLength(0)
   })
 
   it('stops the turn after three consecutive explicit reviewer denials', async () => {

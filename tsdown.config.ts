@@ -14,7 +14,10 @@ function resolveHarness(): string {
   return resolve(recorded)
 }
 
-const adapter = join(resolveHarness(), 'tools/dshx/src/client-build.js')
+const harness = resolveHarness()
+// The official adapter may itself be symlinked outside runtime; forward the resolved target explicitly.
+process.env.DSHX_HARNESS = harness
+const adapter = join(harness, 'tools/dshx/src/client-build.js')
 if (!existsSync(adapter)) throw new Error('DSHX externalClientBundle adapter is missing.')
 const { externalClientBundle } = await import(pathToFileURL(adapter).href)
 

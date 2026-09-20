@@ -1,5 +1,7 @@
 node_modules
-lib/types/
+lib/types/**/*.js
+lib/types/**/*.js.map
+lib/types/**/*.d.ts.map
 coverage/
 .dshx/
 .env
