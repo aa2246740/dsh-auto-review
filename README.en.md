@@ -6,11 +6,20 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-Current release: **0.3.0**, based on the locally used version. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
+Current release: **[0.3.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
 
 Requires DeepSeek Harness **0.1.5-rc.2**, Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
 
 Select **Approve for me** in a session's permission menu to review registered tool calls that DSH would otherwise ask about. The sandbox remains Workspace Write. The global enable switch does not identify or activate a session and does not override `never` or grant Full access.
+
+If `dsh` is not installed globally, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`. The install archive and SHA-256 checksum are available in the [latest release](https://github.com/aa2246740/dsh-auto-review/releases/latest).
+
+## Quick start
+
+1. Install, reopen the Host through its original launcher, and reload the page.
+2. Choose **Approve for me** in the session permission menu.
+3. Open Settings → **Automatic approval** → Overview to follow the session model or select a fixed reviewer. Review failures default to human approval.
+4. Use Review history to inspect decisions and Rules to manage explicit rules. Advanced contains deadline and retention tuning.
 
 ## Features
 

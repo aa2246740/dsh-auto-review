@@ -6,11 +6,13 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-当前版本 **0.3.0**，以日常使用的本地版本为基线；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
+当前版本 **[0.3.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
 
 需要 DeepSeek Harness **0.1.5-rc.2**、Node `^22.19.0` 或 `>=24`，以及 PATH 中的 `pnpm`。仓库包含编好的 `lib/`，普通安装不需要构建或 Creator Mode。官方 `dsh plugin add` 写入下次启动的 profile 组合；首次安装后，通过原启动器重新打开该 Host，再刷新页面。
 
 在 DeepSeek Harness 的权限菜单选择 **Approve for me** 后，对 DSH 原本会询问的注册工具调用进行独立模型审核。沙箱仍是 Workspace Write；全局开关不等于当前会话已启用，也不会改变用户的 `never` 策略或升级成 Full access。
+
+没有全局 `dsh` 命令时，可用 `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`。安装包和 SHA-256 校验文件见 [最新 Release](https://github.com/aa2246740/dsh-auto-review/releases/latest)。
 
 ## 当前功能
 
@@ -25,7 +27,7 @@ dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ## 使用与数据
 
 1. 会话权限菜单选 **Approve for me**。
-2. 设置 → **自动审批** → 高级，选择跟随会话模型或固定模型；故障处理默认“人工审批”。
+2. 设置 → **自动审批** → 概览，选择跟随会话模型或固定模型；故障处理默认“人工审批”。
 3. 在审核历史查看新记录，按会话、状态、工具筛选；可从记录创建规则草稿。历史只覆盖安装此版本后进入本插件的请求，不是完整会话日志，不反向补造旧模型解释。
 
 插件存储为 `$DSH_HOME/approve-for-me/history-v1.json`，未设置 Home 时使用 `~/.dsh`。新目录权限 0700、原子替换文件 0600；默认保留 30 天、最多 1000 条（配置范围 1–365 天、100–10000 条）。只保留有界、脱敏的元数据和参数摘要，不保存完整程序/文件正文。导出只包含当前页的字段白名单；自动脱敏不能识别任意形式的秘密，分享前仍应复核。
