@@ -1,4 +1,4 @@
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client';
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client';
 import type { ApprovalApiCommand, ApprovalDashboard, ApprovalRule, ApprovalSettings, ReviewRecord, ReviewStatus, RuleMatch } from '../contracts.ts';
 export declare const DEFAULT_RULE_HOURS = 8;
 export declare const MAX_RULE_HOURS: number;
@@ -18,7 +18,7 @@ export type NumericSetting = {
 };
 export declare const NUMERIC_SETTINGS: readonly NumericSetting[];
 /** A resolved settings promise can mean recovery after rejection; read back the public mirror. */
-export declare function persistSettings(scope: SettingsScope<ApprovalSettings>, values: Partial<ApprovalSettings>): Promise<boolean>;
+export declare function persistSettings(scope: ConfigForm<ApprovalSettings>, values: Partial<ApprovalSettings>): Promise<boolean>;
 /** Empty, fractional, exponential and non-finite drafts never become settings writes. */
 export declare function parseIntegerDraft(text: string, min: number, max: number): number | undefined;
 export declare function dashboardUrl(filter?: HistoryFilter, before?: number): string;

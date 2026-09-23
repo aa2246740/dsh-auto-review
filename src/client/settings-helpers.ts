@@ -1,4 +1,4 @@
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { APPROVAL_API_PATH } from '../contracts.ts'
 import type { ApprovalApiCommand, ApprovalDashboard, ApprovalRule, ApprovalSettings, ReviewRecord, ReviewStatus, RuleMatch } from '../contracts.ts'
 
@@ -20,7 +20,7 @@ export const NUMERIC_SETTINGS: readonly NumericSetting[] = [
 ]
 
 /** A resolved settings promise can mean recovery after rejection; read back the public mirror. */
-export async function persistSettings(scope: SettingsScope<ApprovalSettings>, values: Partial<ApprovalSettings>): Promise<boolean> {
+export async function persistSettings(scope: ConfigForm<ApprovalSettings>, values: Partial<ApprovalSettings>): Promise<boolean> {
   const snapshot = scope.getSnapshot()
   if (snapshot.status !== 'ready' || !snapshot.writable) return false
   await scope.mutate(Object.entries(values).map(([key, value]) => ({ op: 'set' as const, path: [key], value })))

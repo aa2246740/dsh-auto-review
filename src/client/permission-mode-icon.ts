@@ -13,7 +13,7 @@ const TRIGGER_ATTRIBUTE = 'data-dsh-approve-for-me-trigger'
 const LABEL_ATTRIBUTE = 'data-dsh-approve-for-me-label'
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-/** Official composer rows in every locale DSH 0.1.5-rc.2 actually ships. */
+/** Official composer rows in every locale DSH 0.1.7-rc.1 actually ships. */
 const OFFICIAL_PERMISSION_LABEL_SETS = [
   ['Read Only', 'Workspace Write', 'Full access'],
   ['仅可查看', '工作区内修改', '完全权限'],
@@ -31,7 +31,7 @@ function hasOfficialPermissionRows(labels: readonly string[]): boolean {
 /**
  * Fail closed: the composer permission menu is the one that lists this
  * plugin's preset next to DSH's three official rows. Official labels are
- * locale-specific; 0.1.5-rc.2 ships English and Simplified Chinese.
+ * locale-specific; 0.1.7-rc.1 ships English and Simplified Chinese.
  */
 export function isPermissionPresetMenu(labels: readonly string[]): boolean {
   return labels.includes(APPROVE_FOR_ME_LABEL) && hasOfficialPermissionRows(labels)

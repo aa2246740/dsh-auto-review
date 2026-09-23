@@ -4,7 +4,7 @@ export declare const APPROVE_FOR_ME_SPARK_PATH = "M8.205 3.86C8.397 5.283 9.327 
 /**
  * Fail closed: the composer permission menu is the one that lists this
  * plugin's preset next to DSH's three official rows. Official labels are
- * locale-specific; 0.1.5-rc.2 ships English and Simplified Chinese.
+ * locale-specific; 0.1.7-rc.1 ships English and Simplified Chinese.
  */
 export declare function isPermissionPresetMenu(labels: readonly string[]): boolean;
 /**

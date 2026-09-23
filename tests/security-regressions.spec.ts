@@ -14,7 +14,6 @@ import { ApprovalAuditStore, type ReviewAuditPort } from '../src/audit.ts'
 import { approvalApiResponse } from '../src/api.ts'
 import { argumentFingerprint } from '../src/approval-context.ts'
 import { apply as applyApprovalPlugin } from '../src/dsh-approve-for-me.ts'
-import type { ReviewerSettings } from '../src/dsh-approve-for-me.ts'
 import type { ReviewDecision, ReviewSubject } from '../src/reviewer.ts'
 import type { ApprovalRule, ReviewRecord } from '../src/contracts.ts'
 
@@ -166,7 +165,13 @@ describe('security: public ApprovalService default never reaches the pre-executi
       provide: serviceContext.provide.bind(serviceContext), // Real public in-memory service registration; no HTTP route.
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       permissionPresets: { current: () => 'approve-for-me' },
-      settings: { installSection: (_ctx: unknown, _namespace: string, _schema: unknown, config: ReviewerSettings, options: { setSource: (source: () => ReviewerSettings) => void }) => { options.setSource(() => config) } },
+      fiber: {},
+      inject: (_names: string[], callback: (child: { effect: (setup: () => unknown) => void; settings: { configure: () => () => void } }) => void) => {
+        callback({
+          effect: (setup) => { const cleanup = setup(); if (typeof cleanup === 'function') cleanups.push(cleanup as () => void) },
+          settings: { configure: () => () => {} },
+        })
+      },
       tools: { guard: vi.fn() },
       // This is a capture-only carrier: no endpoint, HTTP listener, or live Host is installed.
       connection: { fetch: { register: vi.fn(() => () => {}) } },
@@ -174,7 +179,21 @@ describe('security: public ApprovalService default never reaches the pre-executi
       effect: (setup: () => unknown) => { const cleanup = setup(); if (typeof cleanup === 'function') cleanups.push(cleanup as () => void) },
       on: (event: string, callback: (...args: any[]) => any) => { hooks.set(event, callback); return () => {} },
     }
-    applyApprovalPlugin(fakeContext as unknown as Context, { enabled: true, failureMode: 'human' })
+    applyApprovalPlugin(fakeContext as unknown as Context, {
+      enabled: { get: () => true },
+      failureMode: { get: () => 'human' },
+      historyRetentionDays: { get: () => 30 },
+      historyMaxRecords: { get: () => 1_000 },
+      modelMode: { get: () => 'follow-agent' },
+      reviewerRoute: { get: () => '' },
+      reasoningMode: { get: () => 'low' },
+      timeoutMs: { get: () => 90_000 },
+      transportRetries: { get: () => 2 },
+      maxOutputTokens: { get: () => 256 },
+      maxInputChars: { get: () => 20_000 },
+      reviewHistoryPairs: { get: () => 4 },
+      reviewHistoryChars: { get: () => 20_000 },
+    })
     expect(Reflect.get(serviceContext, 'creatorAuthorizer')).toMatchObject({ protocol: 'creator-authorizer-host-v1' })
     const preExecute = hooks.get('tools/pre-execute')!
     expect(preExecute).toBeTypeOf('function')

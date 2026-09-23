@@ -2,7 +2,7 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { PreToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -336,7 +336,14 @@ export class AutoReviewCoordinator {
   }
 
   private injectFeedback(agent: Agent, text: string): void {
-    agent.inject(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'dsh-approve-for-me' } }))
+    agent.inject(createUserMessage({
+      content: [{ type: 'text', text }],
+      source: {
+        kind: 'dsh-approve-for-me',
+        form: 'notice',
+        summary: boundContextSummary(text),
+      },
+    }))
   }
 
   private recordDecision(agent: Agent, toolName: string, decision: ReviewDecision): void {

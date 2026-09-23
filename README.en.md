@@ -6,9 +6,9 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-Current release: **[0.3.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
+Current release: **[0.4.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
 
-Requires DeepSeek Harness **0.1.5-rc.2**, Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
+Requires DeepSeek Harness **0.1.7-rc.1** (`>=0.1.7-rc.1 <0.1.8`), Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
 
 Select **Approve for me** in a session's permission menu to review registered tool calls that DSH would otherwise ask about. The sandbox remains Workspace Write. The global enable switch does not identify or activate a session and does not override `never` or grant Full access.
 
@@ -41,7 +41,7 @@ This is an approval plugin, not a same-user filesystem or plugin-code integrity 
 
 ## Installation and development
 
-The plugin ID remains `dsh-approve-for-me`; the repository is `dsh-auto-review`. Install once with the official plugin manager and avoid duplicate bundle/patch mounts. Required public Connection Fetch, locale and SettingsScope package versions are declared in `package.json`; Node is `^22.19.0` or `>=24`.
+The plugin ID remains `dsh-approve-for-me`; the repository is `dsh-auto-review`. Install once with the official plugin manager and avoid duplicate bundle/patch mounts. Required public Connection Fetch, locale, configForms, settings.section, and settings.plugins.tab package versions are declared in `package.json`; Node is `^22.19.0` or `>=24`.
 
 An existing Creator+ install keeps its original source directory. Build/check, then use controlled same-PID server replacement and the client lifecycle branch. A rebuild, module replacement, client load and actual feature acceptance are separate proofs. Follow DSHX evidence rather than restarting the Host or starting a second port by default.
 

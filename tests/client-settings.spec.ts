@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Context } from '@deepseek-ai/cordis'
 import { apply } from '../src/client/index.tsx'
 import { validateRule } from '../src/rules.ts'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ApprovalDashboard, ApprovalSettings, ReviewRecord } from '../src/contracts.ts'
 import { en, zh } from '../src/client/i18n.ts'
 import {
@@ -167,7 +167,7 @@ describe('settings drafts and read-back', () => {
     const mutate = vi.fn(async (ops: Array<{ path: string[]; value: unknown }>) => {
       if (accept) value = { ...value, ...Object.fromEntries(ops.map(op => [op.path[0], op.value])) }
     })
-    const scope = { getSnapshot: () => ({ status, writable: status === 'ready', value }), mutate } as unknown as SettingsScope<ApprovalSettings>
+    const scope = { getSnapshot: () => ({ status, writable: status === 'ready', value }), mutate } as unknown as ConfigForm<ApprovalSettings>
     return { scope, mutate }
   }
   it('does not confuse a silently recovered rejection with a successful write', async () => {
@@ -194,7 +194,7 @@ describe('rendered public settings contributions', () => {
     const locale = { active: 'en', revision: 1, locales: [] }
     const register = vi.fn(() => () => {})
     const context = {
-      settingsScope: { bind: () => ({ getSnapshot: () => settings, subscribe: () => () => {} }) },
+      configForms: { get: () => ({ getSnapshot: () => settings, subscribe: () => () => {} }) },
       remote: { session: { modelCatalog: vi.fn() } },
       locale: { bind: () => (key: keyof typeof en) => locale.active === 'zh' ? zh[key] : en[key], register, getSnapshot: () => locale, subscribe: () => () => {} },
       effect: (fn: () => unknown) => fn(),
@@ -207,7 +207,7 @@ describe('rendered public settings contributions', () => {
   it('renders the four accessible tabs and a separate concise card without any network call during render', () => {
     const { entries, context, register } = registrations()
     const page = entries.find(entry => entry.options.name === 'settings.section')!
-    const card = entries.find(entry => entry.options.name === 'settings.plugin.item')!
+    const card = entries.find(entry => entry.options.name === 'settings.plugins.tab')!
     const pageHtml = renderToStaticMarkup(createElement(page.component, page.options.inject()))
     const cardHtml = renderToStaticMarkup(createElement(card.component, card.options.inject()))
     for (const label of ['Overview', 'Rules', 'Review history', 'Advanced']) expect(pageHtml).toContain(label)
@@ -251,10 +251,10 @@ describe('redacted export and public UI wiring', () => {
   })
   it('declares every direct service and registers both official settings slots', () => {
     const source = readFileSync(new URL('../src/client/index.tsx', import.meta.url), 'utf8')
-    expect(source).toContain("export const inject = ['slots', 'settingsScope', 'remote', 'remote.session', 'locale', 'uiSession']")
+    expect(source).toContain("export const inject = ['slots', 'configForms', 'remote', 'remote.session', 'locale', 'uiSession']")
     expect(source).toContain("name: 'settings.section', id: SETTINGS_NAMESPACE")
-    expect(source).toContain("name: 'settings.plugin.item', key: SETTINGS_NAMESPACE")
-    expect(source).toContain("ctx.settingsScope.bind<ApprovalSettings>({ namespace: SETTINGS_NAMESPACE })")
+    expect(source).toContain("name: 'settings.plugins.tab', id: SETTINGS_NAMESPACE")
+    expect(source).toContain('ctx.configForms.get<ApprovalSettings>(SETTINGS_NAMESPACE)')
     expect(source).toContain('ctx.remote.session.modelCatalog()')
     expect(source).not.toContain('ctx.remote.$host')
     expect(source).not.toContain('ctx.remote.settings')

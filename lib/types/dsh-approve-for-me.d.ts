@@ -1,7 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ApprovalSettings } from './contracts.ts';
 import type { Agent } from '@deepseek-ai/dsh-agent';
+import type { ContextFormed } from '@deepseek-ai/dsh-llm';
 import z from '@deepseek-ai/schemastery';
+declare module '@deepseek-ai/dsh-llm' {
+    interface MessageSourceMap {
+        'dsh-approve-for-me': {
+            kind: 'dsh-approve-for-me';
+        } & ContextFormed;
+    }
+}
 declare module '@deepseek-ai/cordis' {
     interface Context {
         /** Official Web permission-preset service required by this plugin. */
@@ -41,11 +49,59 @@ export interface ReviewerSettings extends ApprovalSettings {
 }
 export type Config = ReviewerSettings;
 /** Composition and durable settings schema. */
-export declare const Config: z<ReviewerSettings>;
+interface LiveValue<T> {
+    get(): T | undefined;
+}
+/** Loader-resolved volatile config. Each decision calls `get()` so a settings write is visible immediately. */
+export interface LiveReviewerConfig {
+    enabled: LiveValue<boolean>;
+    failureMode: LiveValue<'human' | 'reject'>;
+    historyRetentionDays: LiveValue<number>;
+    historyMaxRecords: LiveValue<number>;
+    modelMode: LiveValue<'follow-agent' | 'fixed'>;
+    reviewerRoute: LiveValue<string>;
+    reasoningMode: LiveValue<'low' | 'provider-default'>;
+    timeoutMs: LiveValue<number>;
+    transportRetries: LiveValue<number>;
+    maxOutputTokens: LiveValue<number>;
+    maxInputChars: LiveValue<number>;
+    reviewHistoryPairs: LiveValue<number>;
+    reviewHistoryChars: LiveValue<number>;
+}
+export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+    enabled: z<boolean, boolean, "volatile-defined">;
+    failureMode: z<"human" | "reject", "human" | "reject", "volatile-defined">;
+    historyRetentionDays: z<number, number, "volatile-defined">;
+    historyMaxRecords: z<number, number, "volatile-defined">;
+    modelMode: z<"follow-agent" | "fixed", "follow-agent" | "fixed", "volatile-defined">;
+    reviewerRoute: z<string, string, "volatile-defined">;
+    reasoningMode: z<"low" | "provider-default", "low" | "provider-default", "volatile-defined">;
+    timeoutMs: z<number, number, "volatile-defined">;
+    transportRetries: z<number, number, "volatile-defined">;
+    maxOutputTokens: z<number, number, "volatile-defined">;
+    maxInputChars: z<number, number, "volatile-defined">;
+    reviewHistoryPairs: z<number, number, "volatile-defined">;
+    reviewHistoryChars: z<number, number, "volatile-defined">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    enabled: z<boolean, boolean, "volatile-defined">;
+    failureMode: z<"human" | "reject", "human" | "reject", "volatile-defined">;
+    historyRetentionDays: z<number, number, "volatile-defined">;
+    historyMaxRecords: z<number, number, "volatile-defined">;
+    modelMode: z<"follow-agent" | "fixed", "follow-agent" | "fixed", "volatile-defined">;
+    reviewerRoute: z<string, string, "volatile-defined">;
+    reasoningMode: z<"low" | "provider-default", "low" | "provider-default", "volatile-defined">;
+    timeoutMs: z<number, number, "volatile-defined">;
+    transportRetries: z<number, number, "volatile-defined">;
+    maxOutputTokens: z<number, number, "volatile-defined">;
+    maxInputChars: z<number, number, "volatile-defined">;
+    reviewHistoryPairs: z<number, number, "volatile-defined">;
+    reviewHistoryChars: z<number, number, "volatile-defined">;
+}>>, "plain">;
 /** True only for the explicit preset and an enabled reviewer kill switch. */
 export declare function reviewerModeActive(ctx: Context, agent: Agent, settings: ReviewerSettings): boolean;
 /** The public override intentionally omits the deployment default; include both before any fast path. */
 export declare function canRequestApproval(ctx: Context, agent: Agent): boolean;
 /** Install approval-only Auto-review without changing DSH core policy or tool definitions. */
-export declare function apply(ctx: Context, config: Config): void;
+export declare function apply(ctx: Context, config: LiveReviewerConfig): void;
+export {};
 //# sourceMappingURL=dsh-approve-for-me.d.ts.map

@@ -2,8 +2,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { ApprovalApiCommand, ApprovalDashboard, ApprovalRule, ApprovalSettings, ReviewRecord, RuleMatch } from '../contracts.ts'
@@ -19,17 +18,17 @@ import { registerCreatorConsentTransport } from './creator-consent-transport.tsx
 import { createCreatorConsentHttpTransport, getRememberedGrants, revokeRememberedGrant, type RememberedGrantRow } from './creator-consent-http.ts'
 
 export const name = 'dsh-approve-for-me-client'
-export const inject = ['slots', 'settingsScope', 'remote', 'remote.session', 'locale', 'uiSession']
+export const inject = ['slots', 'configForms', 'remote', 'remote.session', 'locale', 'uiSession']
 const SETTINGS_NAMESPACE = 'dsh-approve-for-me'
 const TABS = ['overview', 'rules', 'history', 'advanced'] as const
 type Tab = typeof TABS[number]
 interface RouteOption { value: string; label: string }
 interface CopyFace { t: ApprovalTranslate; subscribe: (listener: () => void) => () => void; getSnapshot: () => LocaleSnapshot }
-interface PanelInjected { scope: SettingsScope<ApprovalSettings>; loadCatalog: () => Promise<RouteOption[]>; copy: CopyFace }
+interface PanelInjected { scope: ConfigForm<ApprovalSettings>; loadCatalog: () => Promise<RouteOption[]>; copy: CopyFace }
 
 /** Public settings slots only. The card expands the same panel because no general settings-navigation face is public. */
 export function apply(ctx: ClientContext): void {
-  const scope = ctx.settingsScope.bind<ApprovalSettings>({ namespace: SETTINGS_NAMESPACE })
+  const scope = ctx.configForms.get<ApprovalSettings>(SETTINGS_NAMESPACE)
   const copy: CopyFace = {
     t: ctx.locale.bind(LOCALE_NS),
     subscribe: listener => ctx.locale.subscribe(listener),
@@ -49,8 +48,9 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.section', id: SETTINGS_NAMESPACE, order: 24,
     label: () => copy.t('title'), locale: LOCALE_NS, inject: injected,
   }, ApprovalSection))
-  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-    name: 'settings.plugin.item', key: SETTINGS_NAMESPACE, locale: LOCALE_NS, inject: injected,
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab', id: SETTINGS_NAMESPACE, order: 40,
+    label: () => copy.t('title'), locale: LOCALE_NS, inject: injected,
   }, ApprovalCard))
 }
 
@@ -58,7 +58,7 @@ function useCopy(copy: CopyFace): ApprovalTranslate {
   useSyncExternalStore(copy.subscribe, copy.getSnapshot, copy.getSnapshot)
   return copy.t
 }
-function useSettings(scope: SettingsScope<ApprovalSettings>) {
+function useSettings(scope: ConfigForm<ApprovalSettings>) {
   return useSyncExternalStore(listener => scope.subscribe(listener), () => scope.getSnapshot(), () => scope.getSnapshot())
 }
 function errorText(error: unknown, t: ApprovalTranslate): string {
@@ -404,7 +404,7 @@ function RuleEditor({ draft, dashboard, t, onDraft, mutate, busy }: {
   </section>
 }
 
-export function ReviewSettings({ scope, loadCatalog, t, section }: { scope: SettingsScope<ApprovalSettings>; loadCatalog: () => Promise<RouteOption[]>; t: ApprovalTranslate; section: 'basic' | 'advanced' }): ReactNode {
+export function ReviewSettings({ scope, loadCatalog, t, section }: { scope: ConfigForm<ApprovalSettings>; loadCatalog: () => Promise<RouteOption[]>; t: ApprovalTranslate; section: 'basic' | 'advanced' }): ReactNode {
   const snapshot = useSettings(scope)
   const [options, setOptions] = useState<RouteOption[]>([])
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('loading')
