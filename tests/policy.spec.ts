@@ -460,13 +460,11 @@ describe('reviewer contracts', () => {
             data: {
               message: {
                 source: { kind: 'tool', callId },
+                toolCallId: callId,
+                isError: false,
                 content: [{
-                  type: 'tool-result',
-                  toolCallId: callId,
-                  content: [{
-                    type: 'text',
-                    text: '{"cwd":"/Users/alice/work/project","inert":true}',
-                  }],
+                  type: 'text',
+                  text: '{"cwd":"/Users/alice/work/project","inert":true}',
                 }],
               },
             },
@@ -484,11 +482,9 @@ describe('reviewer contracts', () => {
             data: {
               message: {
                 source: { kind: 'tool', callId: questionCallId },
-                content: [{
-                  type: 'tool-result',
-                  toolCallId: questionCallId,
-                  content: [{ type: 'text', text: '{"confirm":"Yes, publish this build."}' }],
-                }],
+                toolCallId: questionCallId,
+                isError: false,
+                content: [{ type: 'text', text: '{"confirm":"Yes, publish this build."}' }],
               },
             },
           },

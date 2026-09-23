@@ -9,7 +9,7 @@ function read(relative: string): string {
   return readFileSync(join(root, relative), 'utf8')
 }
 
-describe('stock DSH 0.1.5-rc.2 install', () => {
+describe('stock DSH 0.1.7-rc.1 install', () => {
   const pkg = JSON.parse(read('package.json')) as {
     name: string
     scripts?: Record<string, string>
@@ -37,7 +37,7 @@ describe('stock DSH 0.1.5-rc.2 install', () => {
     expect(client).toContain('dsh-approve-for-me')
     // The current client uses public settings slots instead of decorating permission DOM.
     expect(client).toContain('settings.section')
-    expect(client).toContain('settings.plugin.item')
+    expect(client).toContain('settings.plugins.tab')
   })
 
   it('leads both READMEs with the official web-profile one-liner and pnpm', () => {

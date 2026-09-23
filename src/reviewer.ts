@@ -206,10 +206,9 @@ function successfulToolResults(agent: Agent): Map<ToolCallId, unknown> {
   const results = new Map<ToolCallId, unknown>()
   for (const event of agent.session.snapshotEvents()) {
     if (event.type !== 'tool/result') continue
-    const source = event.data.message.source
-    if (source.kind !== 'tool'
-      || event.data.message.content.some(block => block.type === 'tool-result' && block.isError === true)) continue
-    results.set(source.callId, redactArguments(event.data.message.content))
+    const message = event.data.message
+    if (message.isError === true) continue
+    results.set(message.toolCallId, redactArguments(message.content))
   }
   return results
 }
@@ -313,10 +312,10 @@ function recentExecutionEvidence(
   for (let index = events.length - 1; index >= 0 && evidence.length < 4; index -= 1) {
     const event = events[index]!
     if (event.type === 'tool/result') {
-      const source = event.data.message.source
-      if (source.kind !== 'tool') continue
-      const serialized = JSON.stringify(redactArguments(event.data.message.content))
-      results.set(source.callId, serialized.slice(0, 4_000))
+      const message = event.data.message
+      if (message.isError === true) continue
+      const serialized = JSON.stringify(redactArguments(message.content))
+      results.set(message.toolCallId, serialized.slice(0, 4_000))
       continue
     }
     if (event.type !== 'tool/call'
@@ -670,7 +669,7 @@ export class ApprovalReviewer {
         ...priorMessages,
         createUserMessage({
           content: [{ type: 'text', text: input }],
-          source: { kind: 'plugin', plugin: 'dsh-approve-for-me' },
+          source: { kind: 'dsh-approve-for-me' },
         }),
       ],
       system: REVIEW_SYSTEM,

@@ -69,7 +69,7 @@ class ReviewConversation {
         this.messages.push(
           createUserMessage({
             content: [{ type: 'text', text: input }],
-            source: { kind: 'plugin', plugin: 'dsh-approve-for-me' },
+            source: { kind: 'dsh-approve-for-me' },
           }),
           createAssistantMessage({
             content: [{ type: 'text', text: output }],

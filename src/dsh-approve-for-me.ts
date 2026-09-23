@@ -7,6 +7,7 @@ import { installApprovalApi } from './api.ts'
 import { argumentFingerprint, targetPlugin } from './approval-context.ts'
 import { matchRules } from './rules.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { PreToolDecision } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-settings'
@@ -22,6 +23,12 @@ import {
   DEFAULT_REVIEW_HISTORY_PAIRS,
 } from './review-session.ts'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'dsh-approve-for-me': { kind: 'dsh-approve-for-me' } & ContextFormed
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Official Web permission-preset service required by this plugin. */
@@ -32,7 +39,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export const name = 'dsh-approve-for-me'
-export const inject = ['tools', 'llm', 'approval', 'permissionPresets', 'settings', 'connection']
+export const inject = ['tools', 'llm', 'approval', 'permissionPresets', 'connection']
 
 /** Permission-preset key that delegates approval requests to this reviewer. */
 export const APPROVE_FOR_ME_PRESET = 'approve-for-me'
@@ -67,21 +74,58 @@ export interface ReviewerSettings extends ApprovalSettings {
 export type Config = ReviewerSettings
 
 /** Composition and durable settings schema. */
-export const Config: z<ReviewerSettings> = z.object({
-  enabled: z.boolean().default(true),
-  failureMode: z.union(['human', 'reject'] as const).default('human'),
-  historyRetentionDays: z.number().step(1).min(1).max(365).default(30),
-  historyMaxRecords: z.number().step(1).min(100).max(10_000).default(1_000),
-  modelMode: z.union(['follow-agent', 'fixed'] as const).default('follow-agent'),
-  reviewerRoute: z.string().default(''),
-  reasoningMode: z.union(['low', 'provider-default'] as const).default('low'),
-  timeoutMs: z.number().step(1).min(1_000).max(120_000).default(90_000),
-  transportRetries: z.number().step(1).min(0).max(2).default(2),
-  maxOutputTokens: z.number().step(1).min(128).max(4_096).default(256),
-  maxInputChars: z.number().step(1).min(2_000).max(100_000).default(20_000),
-  reviewHistoryPairs: z.number().step(1).min(1).max(12).default(DEFAULT_REVIEW_HISTORY_PAIRS),
-  reviewHistoryChars: z.number().step(1).min(2_000).max(100_000).default(DEFAULT_REVIEW_HISTORY_CHARS),
+interface LiveValue<T> { get(): T | undefined }
+
+/** Loader-resolved volatile config. Each decision calls `get()` so a settings write is visible immediately. */
+export interface LiveReviewerConfig {
+  enabled: LiveValue<boolean>
+  failureMode: LiveValue<'human' | 'reject'>
+  historyRetentionDays: LiveValue<number>
+  historyMaxRecords: LiveValue<number>
+  modelMode: LiveValue<'follow-agent' | 'fixed'>
+  reviewerRoute: LiveValue<string>
+  reasoningMode: LiveValue<'low' | 'provider-default'>
+  timeoutMs: LiveValue<number>
+  transportRetries: LiveValue<number>
+  maxOutputTokens: LiveValue<number>
+  maxInputChars: LiveValue<number>
+  reviewHistoryPairs: LiveValue<number>
+  reviewHistoryChars: LiveValue<number>
+}
+
+export const Config = z.object({
+  enabled: z.boolean().default(true).volatile(),
+  failureMode: z.union(['human', 'reject'] as const).default('human').volatile(),
+  historyRetentionDays: z.number().step(1).min(1).max(365).default(30).volatile(),
+  historyMaxRecords: z.number().step(1).min(100).max(10_000).default(1_000).volatile(),
+  modelMode: z.union(['follow-agent', 'fixed'] as const).default('follow-agent').volatile(),
+  reviewerRoute: z.string().default('').volatile(),
+  reasoningMode: z.union(['low', 'provider-default'] as const).default('low').volatile(),
+  timeoutMs: z.number().step(1).min(1_000).max(120_000).default(90_000).volatile(),
+  transportRetries: z.number().step(1).min(0).max(2).default(2).volatile(),
+  maxOutputTokens: z.number().step(1).min(128).max(4_096).default(256).volatile(),
+  maxInputChars: z.number().step(1).min(2_000).max(100_000).default(20_000).volatile(),
+  reviewHistoryPairs: z.number().step(1).min(1).max(12).default(DEFAULT_REVIEW_HISTORY_PAIRS).volatile(),
+  reviewHistoryChars: z.number().step(1).min(2_000).max(100_000).default(DEFAULT_REVIEW_HISTORY_CHARS).volatile(),
 })
+
+function currentSettings(config: LiveReviewerConfig): ReviewerSettings {
+  return {
+    enabled: config.enabled.get() ?? true,
+    failureMode: config.failureMode.get() ?? 'human',
+    historyRetentionDays: config.historyRetentionDays.get() ?? 30,
+    historyMaxRecords: config.historyMaxRecords.get() ?? 1_000,
+    modelMode: config.modelMode.get() ?? 'follow-agent',
+    reviewerRoute: config.reviewerRoute.get() ?? '',
+    reasoningMode: config.reasoningMode.get() ?? 'low',
+    timeoutMs: config.timeoutMs.get() ?? 90_000,
+    transportRetries: config.transportRetries.get() ?? 2,
+    maxOutputTokens: config.maxOutputTokens.get() ?? 256,
+    maxInputChars: config.maxInputChars.get() ?? 20_000,
+    reviewHistoryPairs: config.reviewHistoryPairs.get() ?? DEFAULT_REVIEW_HISTORY_PAIRS,
+    reviewHistoryChars: config.reviewHistoryChars.get() ?? DEFAULT_REVIEW_HISTORY_CHARS,
+  }
+}
 
 /** True only for the explicit preset and an enabled reviewer kill switch. */
 export function reviewerModeActive(
@@ -99,13 +143,12 @@ export function canRequestApproval(ctx: Context, agent: Agent): boolean {
 }
 
 /** Install approval-only Auto-review without changing DSH core policy or tool definitions. */
-export function apply(ctx: Context, config: Config): void {
+export function apply(ctx: Context, config: LiveReviewerConfig): void {
   ctx.logger.info('[my-plugins/dsh-approve-for-me] loaded')
-  let source: () => ReviewerSettings = () => config
-  ctx.settings.installSection(ctx, APPROVE_FOR_ME_SETTINGS_NAMESPACE, Config, config, {
-    setSource: current => { source = current },
-    // Every decision reads the current section. No registration needs rebuilding.
-    onChange: () => {},
+  const source = (): ReviewerSettings => currentSettings(config)
+  // Custom settings pages own their UI. Volatile fields stay readable without this policy.
+  ctx.inject(['settings'], (child) => {
+    child.effect(() => child.settings.configure({ auto: false }, ctx.fiber))
   })
 
   const reviewer = new ApprovalReviewer(ctx, source)

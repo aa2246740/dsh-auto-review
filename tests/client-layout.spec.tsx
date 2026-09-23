@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { readFileSync, writeFileSync } from 'node:fs'
 import styles from '../src/client/styles.module.css'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ApprovalDashboard, ApprovalSettings, ReviewRecord } from '../src/contracts.ts'
 import { Overview } from '../src/client/overview.tsx'
 import { ReviewSettings } from '../src/client/index.tsx'
@@ -10,9 +10,9 @@ import { zh, type ApprovalTranslate } from '../src/client/i18n.ts'
 
 const t = ((key: keyof typeof zh, values?: Record<string, string | number>) => Object.entries(values ?? {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), zh[key])) as ApprovalTranslate
 const dashboard: ApprovalDashboard = { version: 1, revision: 1, records: [], rules: [], storage: { ok: true, retentionDays: 30, maxRecords: 1000 }, capabilities: { creator: { automatic: false, reason: 'CREATOR_LIMIT' }, creatorPlus: { automatic: false, reason: 'PLUS_LIMIT' } } }
-function scope(value: ApprovalSettings = {}, writable = true): SettingsScope<ApprovalSettings> {
-  const snapshot = { status: 'ready', value, writable, revision: 1, mode: 'host' }
-  return { getSnapshot: () => snapshot, subscribe: () => () => {} } as unknown as SettingsScope<ApprovalSettings>
+function scope(value: ApprovalSettings = {}, writable = true): ConfigForm<ApprovalSettings> {
+  const snapshot = { status: 'ready' as const, value, writable, revision: 1, mode: 'host' as const }
+  return { getSnapshot: () => snapshot, subscribe: () => () => {} } as unknown as ConfigForm<ApprovalSettings>
 }
 const loadCatalog = vi.fn(async () => [])
 const basic = (value: ApprovalSettings = {}, writable = true) => <ReviewSettings scope={scope(value, writable)} loadCatalog={loadCatalog} t={t} section="basic" />

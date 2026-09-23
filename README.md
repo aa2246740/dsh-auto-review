@@ -6,9 +6,9 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-当前版本 **[0.3.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
+当前版本 **[0.4.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
 
-需要 DeepSeek Harness **0.1.5-rc.2**、Node `^22.19.0` 或 `>=24`，以及 PATH 中的 `pnpm`。仓库包含编好的 `lib/`，普通安装不需要构建或 Creator Mode。官方 `dsh plugin add` 写入下次启动的 profile 组合；首次安装后，通过原启动器重新打开该 Host，再刷新页面。
+需要 DeepSeek Harness **0.1.7-rc.1**（`>=0.1.7-rc.1 <0.1.8`）、Node `^22.19.0` 或 `>=24`，以及 PATH 中的 `pnpm`。仓库包含编好的 `lib/`，普通安装不需要构建或 Creator Mode。官方 `dsh plugin add` 写入下次启动的 profile 组合；首次安装后，通过原启动器重新打开该 Host，再刷新页面。
 
 在 DeepSeek Harness 的权限菜单选择 **Approve for me** 后，对 DSH 原本会询问的注册工具调用进行独立模型审核。沙箱仍是 Workspace Write；全局开关不等于当前会话已启用，也不会改变用户的 `never` 策略或升级成 Full access。
 
@@ -38,7 +38,7 @@ dsh plugin --profile web add github:aa2246740/dsh-auto-review
 
 插件 ID 保持 `dsh-approve-for-me`，仓库名仍为 `dsh-auto-review`。使用官方插件管理器安装一次，不要通过多个 bundle/patch 重复挂载。
 
-本版本面向带有公共 Connection Fetch、SettingsScope、locale、settings.section 的官方 WebUI；新增客户端/连接依赖以包内 `package.json` 为准。Node 要求 `^22.19.0` 或 `>=24`。
+本版本面向带有公共 Connection Fetch、configForms、locale、settings.section 与 settings.plugins.tab 的官方 WebUI；新增客户端/连接依赖以包内 `package.json` 为准。Node 要求 `^22.19.0` 或 `>=24`。
 
 已有 Creator+ 安装保持原目录：构建、`dshx_check` 后，服务端通过受控 `dshx_hot_reload`，客户端按 client 分支验证。是否需要页面刷新或外部启动器操作必须遵循 DSHX 证据，不能一律重启 Host、另开端口或修改核心。构建、模块替换、客户端加载、功能验收是不同状态。
 
