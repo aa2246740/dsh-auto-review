@@ -258,10 +258,15 @@ export class AutoReviewCoordinator {
   private humanFallback(): boolean { return (this.options.failureMode?.() ?? 'human') === 'human' }
 
   private prepareHandoff(pending: PendingReview, downstream: Extract<PreToolDecision, { kind: 'ask' }>, decision: ReviewDecision, source: DecisionSource, auditId?: string): PreToolDecision {
-    const reason = `${downstream.reason ?? '此动作需要审批。'}\n${source === 'rule' ? '规则要求人工确认' : '自动审核故障，已转人工确认'}：${decision.reason}\n本次确认只作用于当前请求，不创建长期许可。`
+    const lead = downstream.reason ?? '此动作需要审批。'
+    const reason = `${lead}\n${source === 'rule' ? '规则要求人工确认' : '自动审核故障，已转人工确认'}：${decision.reason}\n本次确认只作用于当前请求，不创建长期许可。`
+    const english = source === 'rule'
+      ? `${lead}\nA saved rule requires confirmation for this request only: ${decision.reason}\nThis confirmation applies only to the current request and does not create a standing permission.`
+      : `${lead}\nAutomatic review failed and this request needs confirmation: ${decision.reason}\nThis confirmation applies only to the current request and does not create a standing permission.`
     pending.handoff = { reason, decision, source, ...auditId === undefined ? {} : { auditId } }
     if (auditId !== undefined) this.options.audit?.update(auditId, { status: 'pending-human', execution: 'not-started', source, reason: decision.reason })
-    return { kind: 'ask', reason }
+    // rc.2 approval UI prefers displayReason. The audited reason string stays the Chinese handoff text.
+    return { kind: 'ask', reason, displayReason: { en: english, zh: reason } }
   }
 
   private async assess(subject: ReviewSubject, exec: ToolExecution | undefined, signal: AbortSignal, immediate?: ReviewDecision, rule?: RuleMatch): Promise<{ decision: ReviewDecision; auditId?: string }> {

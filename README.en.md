@@ -6,9 +6,9 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-Current release: **[0.4.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
+Current version: **0.4.1**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
 
-Requires DeepSeek Harness **0.1.7-rc.1** (`>=0.1.7-rc.1 <0.1.8`), Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
+Requires DeepSeek Harness **0.1.7-rc.2** (peer `>=0.1.7-rc.1 <0.1.8`, accepts `0.1.7-rc.2`, rejects `0.1.7` alphas), Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
 
 Select **Approve for me** in a session's permission menu to review registered tool calls that DSH would otherwise ask about. The sandbox remains Workspace Write. The global enable switch does not identify or activate a session and does not override `never` or grant Full access.
 

@@ -9,7 +9,7 @@ function read(relative: string): string {
   return readFileSync(join(root, relative), 'utf8')
 }
 
-describe('stock DSH 0.1.7-rc.1 install', () => {
+describe('stock DSH 0.1.7-rc.2 install', () => {
   const pkg = JSON.parse(read('package.json')) as {
     name: string
     scripts?: Record<string, string>
