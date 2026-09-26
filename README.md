@@ -2,17 +2,33 @@
 
 # 替我审批
 
-```sh
-dsh plugin --profile web add github:aa2246740/dsh-auto-review
-```
-
 当前版本 **0.4.1**；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
 
-需要 DeepSeek Harness **0.1.7-rc.2**（peer `>=0.1.7-rc.1 <0.1.8`，接受 `0.1.7-rc.2`，拒绝 `0.1.7` alpha）、Node `^22.19.0` 或 `>=24`，以及 PATH 中的 `pnpm`。仓库包含编好的 `lib/`，普通安装不需要构建或 Creator Mode。官方 `dsh plugin add` 写入下次启动的 profile 组合；首次安装后，通过原启动器重新打开该 Host，再刷新页面。
+## 安装
+
+### DSH Studio 桌面 App（推荐）
+
+打开 **设置 → 插件 → 添加插件**，在“包名或地址”中输入：
+
+```text
+github:aa2246740/dsh-auto-review#v0.4.1
+```
+
+桌面端插件管理器负责 Desktop profile 和内置包管理器。仓库名为 `dsh-auto-review`，插件 ID 仍是 `dsh-approve-for-me`。本发布包含编好的 `lib/`；普通使用不需要 clone、构建、Creator Mode 或 DSHX。若应用提示刷新或重新打开，请按提示完成。
+
+### Web CLI
+
+```sh
+dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.1
+```
+
+这条官方 CLI 命令只写入 `web` profile，不能修改 Desktop App 的 profile。对于已经运行的 Web Host，请重新打开该 Host 一次，再刷新网页。
+
+需要 DeepSeek Harness **0.1.7-rc.2**（peer `>=0.1.7-rc.1 <0.1.8`，接受 `0.1.7-rc.2`，拒绝 `0.1.7` alpha）和 Node `^22.19.0` 或 `>=24`。
 
 在 DeepSeek Harness 的权限菜单选择 **Approve for me** 后，对 DSH 原本会询问的注册工具调用进行独立模型审核。沙箱仍是 Workspace Write；全局开关不等于当前会话已启用，也不会改变用户的 `never` 策略或升级成 Full access。
 
-没有全局 `dsh` 命令时，可用 `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`。安装包和 SHA-256 校验文件见 [最新 Release](https://github.com/aa2246740/dsh-auto-review/releases/latest)。
+没有全局 `dsh` 命令时，可用 `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.1`。安装包和 SHA-256 校验文件见 [最新 Release](https://github.com/aa2246740/dsh-auto-review/releases/latest)。
 
 ## 当前功能
 

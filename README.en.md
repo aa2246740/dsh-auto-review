@@ -2,17 +2,33 @@
 
 # Approve for me
 
-```sh
-dsh plugin --profile web add github:aa2246740/dsh-auto-review
-```
-
 Current version: **0.4.1**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
 
-Requires DeepSeek Harness **0.1.7-rc.2** (peer `>=0.1.7-rc.1 <0.1.8`, accepts `0.1.7-rc.2`, rejects `0.1.7` alphas), Node `^22.19.0` or `>=24`, and `pnpm` on PATH. Built `lib/` is committed, so installation needs neither a build nor Creator Mode. Official `dsh plugin add` writes the profile composition for the next boot. After a first install, reopen that Host through its original launcher and reload the page.
+## Install
+
+### DSH Studio desktop app (recommended)
+
+Open **Settings → Plugins → Add plugin** and enter this in “Package name or address”:
+
+```text
+github:aa2246740/dsh-auto-review#v0.4.1
+```
+
+The desktop plugin manager owns the Desktop profile and bundled package manager. The repository is `dsh-auto-review`; the plugin ID remains `dsh-approve-for-me`. Built `lib/` is included, so normal use needs no clone, build, Creator Mode, or DSHX installation. Follow the app if it asks you to reload or reopen after installation.
+
+### Web CLI
+
+```sh
+dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.1
+```
+
+This official CLI command writes only the `web` profile; it cannot modify the Desktop App profile. For an already-running Web Host, reopen that Host once and reload the page.
+
+Requires DeepSeek Harness **0.1.7-rc.2** (peer `>=0.1.7-rc.1 <0.1.8`, accepts `0.1.7-rc.2`, rejects `0.1.7` alphas) and Node `^22.19.0` or `>=24`.
 
 Select **Approve for me** in a session's permission menu to review registered tool calls that DSH would otherwise ask about. The sandbox remains Workspace Write. The global enable switch does not identify or activate a session and does not override `never` or grant Full access.
 
-If `dsh` is not installed globally, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review`. The install archive and SHA-256 checksum are available in the [latest release](https://github.com/aa2246740/dsh-auto-review/releases/latest).
+If `dsh` is not installed globally, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.1`. The install archive and SHA-256 checksum are available in the [latest release](https://github.com/aa2246740/dsh-auto-review/releases/latest).
 
 ## Quick start
 
