@@ -6,9 +6,9 @@
 dsh plugin --profile web add github:aa2246740/dsh-auto-review
 ```
 
-当前版本 **[0.4.0](https://github.com/aa2246740/dsh-auto-review/releases/latest)**；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
+当前版本 **0.4.1**；**`main` 是唯一维护分支**。插件 ID 仍为 `dsh-approve-for-me`，安装时无需改名或选择兼容分支。
 
-需要 DeepSeek Harness **0.1.7-rc.1**（`>=0.1.7-rc.1 <0.1.8`）、Node `^22.19.0` 或 `>=24`，以及 PATH 中的 `pnpm`。仓库包含编好的 `lib/`，普通安装不需要构建或 Creator Mode。官方 `dsh plugin add` 写入下次启动的 profile 组合；首次安装后，通过原启动器重新打开该 Host，再刷新页面。
+需要 DeepSeek Harness **0.1.7-rc.2**（peer `>=0.1.7-rc.1 <0.1.8`，接受 `0.1.7-rc.2`，拒绝 `0.1.7` alpha）、Node `^22.19.0` 或 `>=24`，以及 PATH 中的 `pnpm`。仓库包含编好的 `lib/`，普通安装不需要构建或 Creator Mode。官方 `dsh plugin add` 写入下次启动的 profile 组合；首次安装后，通过原启动器重新打开该 Host，再刷新页面。
 
 在 DeepSeek Harness 的权限菜单选择 **Approve for me** 后，对 DSH 原本会询问的注册工具调用进行独立模型审核。沙箱仍是 Workspace Write；全局开关不等于当前会话已启用，也不会改变用户的 `never` 策略或升级成 Full access。
 

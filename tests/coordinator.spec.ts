@@ -47,6 +47,9 @@ describe('recoverable approval failures', () => {
     expect(gate.kind).toBe('ask')
     if (gate.kind !== 'ask') throw new Error('expected ask')
     expect(gate.reason).toContain('Connection error')
+    expect(gate.displayReason?.zh).toBe(gate.reason)
+    expect(gate.displayReason?.en).toContain('Automatic review failed')
+    expect(gate.displayReason?.en).toContain('Connection error')
     const human = deferred<ApprovalOutcome>()
     const next = vi.fn(() => human.promise)
     let executed = false

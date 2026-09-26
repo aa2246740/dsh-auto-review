@@ -84,7 +84,7 @@ const CAPTURED_PROMPTED_OBSERVATIONS = [
     name: 'grep',
     arguments: {
       pattern: 'thinking|running|busy|pending|streaming',
-      path: '/Users/alice/Documents/Codex/deepseek-harness-rc8/my-plugins/dsh-glance-hub/node_modules/@deepseek-ai/dsh-client-runtime',
+      path: '/Users/alice/Documents/Codex/deepseek-harness-rc8/my-plugins/dsh-glance-hub/node_modules/@deepseek-ai/cordis',
       include: '*.d.ts',
     },
   },
