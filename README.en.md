@@ -2,7 +2,7 @@
 
 # Approve for me
 
-Current version: **0.4.1**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
+Current version: **0.4.2**. **`main` is the only maintained branch.** The plugin ID remains `dsh-approve-for-me`; no rename or compatibility-branch selection is required.
 
 ## Install
 
@@ -11,7 +11,7 @@ Current version: **0.4.1**. **`main` is the only maintained branch.** The plugin
 Open **Settings → Plugins → Add plugin** and enter this in “Package name or address”:
 
 ```text
-github:aa2246740/dsh-auto-review#v0.4.1
+github:aa2246740/dsh-auto-review#v0.4.2
 ```
 
 The desktop plugin manager owns the Desktop profile and bundled package manager. The repository is `dsh-auto-review`; the plugin ID remains `dsh-approve-for-me`. Built `lib/` is included, so normal use needs no clone, build, Creator Mode, or DSHX installation. Follow the app if it asks you to reload or reopen after installation.
@@ -19,16 +19,16 @@ The desktop plugin manager owns the Desktop profile and bundled package manager.
 ### Web CLI
 
 ```sh
-dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.1
+dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.2
 ```
 
 This official CLI command writes only the `web` profile; it cannot modify the Desktop App profile. For an already-running Web Host, reopen that Host once and reload the page.
 
-Requires DeepSeek Harness **0.1.7-rc.2** (peer `>=0.1.7-rc.1 <0.1.8`, accepts `0.1.7-rc.2`, rejects `0.1.7` alphas) and Node `^22.19.0` or `>=24`.
+Requires DeepSeek Harness **0.2.0-rc.1** (`@deepseek-ai/dsh` and `@deepseek-ai/dsh-*` peer `>=0.2.0-rc.1 <0.2.1`; accepts `0.2.0-rc.1` and stable `0.2.0`, rejects `0.2.0` alphas, and rejects `0.1.7-rc.2`) and Node `^22.19.0` or `>=24`.
 
 Select **Approve for me** in a session's permission menu to review registered tool calls that DSH would otherwise ask about. The sandbox remains Workspace Write. The global enable switch does not identify or activate a session and does not override `never` or grant Full access.
 
-If `dsh` is not installed globally, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.1`. The install archive and SHA-256 checksum are available in the [latest release](https://github.com/aa2246740/dsh-auto-review/releases/latest).
+If `dsh` is not installed globally, use `npx @deepseek-ai/dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.2`. The install archive and SHA-256 checksum are available in the [latest release](https://github.com/aa2246740/dsh-auto-review/releases/latest).
 
 ## Quick start
 
