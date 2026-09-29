@@ -24,7 +24,7 @@ dsh plugin --profile web add github:aa2246740/dsh-auto-review#v0.4.2
 
 这条官方 CLI 命令只写入 `web` profile，不能修改 Desktop App 的 profile。对于已经运行的 Web Host，请重新打开该 Host 一次，再刷新网页。
 
-需要 DeepSeek Harness **0.2.0-rc.1**（`@deepseek-ai/dsh` 与 `@deepseek-ai/dsh-*` peer `>=0.2.0-rc.1 <0.2.1`，接受 `0.2.0-rc.1` 与稳定版 `0.2.0`，拒绝 `0.2.0` alpha，拒绝 `0.1.7-rc.2`）和 Node `^22.19.0` 或 `>=24`。
+需要 DeepSeek Harness **0.2.0-rc.2**（`@deepseek-ai/dsh` 与 `@deepseek-ai/dsh-*` peer `>=0.2.0-rc.1 <0.2.1`，接受 `0.2.0-rc.2` 与稳定版 `0.2.0`，拒绝 `0.2.0` alpha，拒绝 `0.1.7-rc.2`）和 Node `^22.19.0` 或 `>=24`。
 
 在 DeepSeek Harness 的权限菜单选择 **Approve for me** 后，对 DSH 原本会询问的注册工具调用进行独立模型审核。沙箱仍是 Workspace Write；全局开关不等于当前会话已启用，也不会改变用户的 `never` 策略或升级成 Full access。
 

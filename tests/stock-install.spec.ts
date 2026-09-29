@@ -9,7 +9,7 @@ function read(relative: string): string {
   return readFileSync(join(root, relative), 'utf8')
 }
 
-describe('stock DSH 0.2.0-rc.1 install', () => {
+describe('stock DSH 0.2.0-rc.2 install', () => {
   const pkg = JSON.parse(read('package.json')) as {
     name: string
     scripts?: Record<string, string>
@@ -18,7 +18,7 @@ describe('stock DSH 0.2.0-rc.1 install', () => {
     dsh?: { bundle?: { patch?: string } }
   }
 
-  it('sets the 0.2.0-rc.1 peer range on @deepseek-ai/dsh and @deepseek-ai/dsh-*', () => {
+  it('sets the 0.2.0-rc.2 peer range on @deepseek-ai/dsh and @deepseek-ai/dsh-*', () => {
     const range = '>=0.2.0-rc.1 <0.2.1'
     const peers = pkg.peerDependencies ?? {}
     expect(peers['@deepseek-ai/dsh']).toBe(range)
