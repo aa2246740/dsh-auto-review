@@ -9,13 +9,23 @@ function read(relative: string): string {
   return readFileSync(join(root, relative), 'utf8')
 }
 
-describe('stock DSH 0.1.7-rc.2 install', () => {
+describe('stock DSH 0.2.0-rc.2 install', () => {
   const pkg = JSON.parse(read('package.json')) as {
     name: string
     scripts?: Record<string, string>
     files?: string[]
+    peerDependencies?: Record<string, string>
     dsh?: { bundle?: { patch?: string } }
   }
+
+  it('sets the 0.2.0-rc.2 peer range on @deepseek-ai/dsh and @deepseek-ai/dsh-*', () => {
+    const range = '>=0.2.0-rc.1 <0.2.1'
+    const peers = pkg.peerDependencies ?? {}
+    expect(peers['@deepseek-ai/dsh']).toBe(range)
+    const dshPeers = Object.entries(peers).filter(([name]) => name.startsWith('@deepseek-ai/dsh'))
+    expect(dshPeers.length).toBeGreaterThan(1)
+    for (const [, value] of dshPeers) expect(value).toBe(range)
+  })
 
   it('declares dsh.bundle.patch so dsh plugin add joins the profile layer', () => {
     expect(pkg.name).toBe('dsh-approve-for-me')
@@ -40,15 +50,14 @@ describe('stock DSH 0.1.7-rc.2 install', () => {
     expect(client).toContain('settings.plugins.tab')
   })
 
-  it('leads both READMEs with the official web-profile one-liner and pnpm', () => {
+  it('documents the official web-profile one-liner, peer range, and pnpm', () => {
     const command = 'dsh plugin --profile web add github:aa2246740/dsh-auto-review'
     for (const relative of ['README.md', 'README.en.md']) {
       const text = read(relative)
-      const heading = text.indexOf('\n# ')
-      const commandAt = text.indexOf(command)
-      expect(heading).toBeGreaterThan(-1)
-      expect(commandAt).toBeGreaterThan(heading)
-      expect(commandAt).toBeLessThan(text.indexOf('\n## '))
+      expect(text.indexOf('\n# ')).toBeGreaterThan(-1)
+      expect(text).toContain(command)
+      expect(text).toContain('>=0.2.0-rc.1 <0.2.1')
+      expect(text).toContain('0.1.7-rc.2')
       expect(text).toMatch(/pnpm/i)
       expect(text).not.toMatch(/dshx check|my-plugins\/dsh-approve-for-me|DSHX_HARNESS/)
     }
