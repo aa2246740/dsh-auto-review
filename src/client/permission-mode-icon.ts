@@ -13,7 +13,7 @@ const TRIGGER_ATTRIBUTE = 'data-dsh-approve-for-me-trigger'
 const LABEL_ATTRIBUTE = 'data-dsh-approve-for-me-label'
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-/** Official composer rows in every locale DSH 0.2.0-rc.2 actually ships. */
+/** Official composer rows in every locale DSH 0.2.1-rc.2 actually ships. */
 const OFFICIAL_PERMISSION_LABEL_SETS = [
   ['Read Only', 'Workspace Write', 'Full access'],
   ['仅可查看', '工作区内修改', '完全权限'],

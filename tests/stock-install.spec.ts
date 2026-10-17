@@ -9,17 +9,19 @@ function read(relative: string): string {
   return readFileSync(join(root, relative), 'utf8')
 }
 
-describe('stock DSH 0.2.0-rc.2 install', () => {
+describe('stock DSH 0.2.1-rc.2 install', () => {
   const pkg = JSON.parse(read('package.json')) as {
     name: string
     scripts?: Record<string, string>
     files?: string[]
+    engines?: Record<string, string>
     peerDependencies?: Record<string, string>
     dsh?: { bundle?: { patch?: string } }
   }
 
-  it('sets the 0.2.0-rc.2 peer range on @deepseek-ai/dsh and @deepseek-ai/dsh-*', () => {
-    const range = '>=0.2.0-rc.1 <0.2.1'
+  it('sets the 0.2.1-rc.2 peer and engines.dsh range on @deepseek-ai/dsh and @deepseek-ai/dsh-*', () => {
+    const range = '>=0.2.1-rc.1 <0.2.2'
+    expect(pkg.engines?.dsh).toBe(range)
     const peers = pkg.peerDependencies ?? {}
     expect(peers['@deepseek-ai/dsh']).toBe(range)
     const dshPeers = Object.entries(peers).filter(([name]) => name.startsWith('@deepseek-ai/dsh'))
@@ -56,8 +58,8 @@ describe('stock DSH 0.2.0-rc.2 install', () => {
       const text = read(relative)
       expect(text.indexOf('\n# ')).toBeGreaterThan(-1)
       expect(text).toContain(command)
-      expect(text).toContain('>=0.2.0-rc.1 <0.2.1')
-      expect(text).toContain('0.1.7-rc.2')
+      expect(text).toContain('>=0.2.1-rc.1 <0.2.2')
+      expect(text).toContain('0.2.0-rc.2')
       expect(text).toMatch(/pnpm/i)
       expect(text).not.toMatch(/dshx check|my-plugins\/dsh-approve-for-me|DSHX_HARNESS/)
     }
