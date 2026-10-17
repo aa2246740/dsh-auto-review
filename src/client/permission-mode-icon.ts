@@ -31,7 +31,7 @@ function hasOfficialPermissionRows(labels: readonly string[]): boolean {
 /**
  * Fail closed: the composer permission menu is the one that lists this
  * plugin's preset next to DSH's three official rows. Official labels are
- * locale-specific; 0.2.0-rc.2 ships English and Simplified Chinese.
+ * locale-specific; 0.2.1-rc.2 ships English and Simplified Chinese.
  */
 export function isPermissionPresetMenu(labels: readonly string[]): boolean {
   return labels.includes(APPROVE_FOR_ME_LABEL) && hasOfficialPermissionRows(labels)
