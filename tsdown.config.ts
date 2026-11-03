@@ -19,6 +19,8 @@ function resolveHarnessAdapter(): string {
   return join(root, 'tools/dshx/src/client-build.js')
 }
 
+// Vendored tools/client-build.js reads the target platform table at import time.
+resolveHarnessAdapter()
 const adapter = existsSync(vendored) ? vendored : resolveHarnessAdapter()
 if (!existsSync(adapter)) throw new Error('DSHX externalClientBundle adapter is missing.')
 const { externalClientBundle } = await import(pathToFileURL(adapter).href)
