@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { setImmediate as immediate } from 'node:timers'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -45,7 +46,7 @@ afterEach(async () => {
 })
 async function fixture(override: Partial<CreatorAuthorizerOptions> = {}) {
   const ctx = new Context()
-  const fibers = [await ctx.plugin(SessionStore), await ctx.plugin(SessionProjectionRegistry), await ctx.plugin(ApprovalService)]
+  const fibers = [await ctx.plugin(SessionStore), await ctx.plugin(SessionProjectionRegistry), await ctx.plugin(ApprovalService), await ctx.plugin(AgentRegistry)]
   // No shell execution: this public service's configured default is only an input to the REAL preset fold.
   ctx.provide('shell', { sandboxMode: 'danger-full-access', run() { throw new Error('No dispatch in these tests') } })
   fibers.push(await ctx.plugin(PermissionPresetService, { presets: { 'approve-for-me': { sandbox: 'danger-full-access', approval: 'ask' }, outside: { sandbox: 'read-only', approval: 'ask' } }, defaultPreset: 'approve-for-me' }))

@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -147,10 +149,14 @@ describe('security: audit failure never downgrades a known denial to human appro
 describe('security: public ApprovalService default never reaches the pre-execution gate', () => {
   it('does not convert ask to allow when there is no session override and the real service defaults to never', async () => {
     const serviceContext = new Context()
+    const sessions = await serviceContext.plugin(SessionStore)
+    const projections = await serviceContext.plugin(SessionProjectionRegistry)
     const fiber = await serviceContext.plugin(ApprovalService, { policy: 'never' })
-    cleanups.push(() => fiber.dispose())
+    cleanups.push(() => fiber.dispose(), () => projections.dispose(), () => sessions.dispose())
     const approval = serviceContext.approval
-    const agent = owner('no-policy-override')
+    const session = serviceContext.sessions.create(SessionId('no-policy-override'))
+    session.append('turn/start', { turn: 1 })
+    const agent = { id: 'no-policy-override', inject: vi.fn(), cancel: vi.fn(), session } as unknown as Agent
     expect(approval.overrideOf(agent.session)).toBeUndefined()
     expect(approval.config.policy).toBe('never')
     const human = vi.fn(async (): Promise<ApprovalOutcome> => 'allowed-once')

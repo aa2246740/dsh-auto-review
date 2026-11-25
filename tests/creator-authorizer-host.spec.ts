@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -28,7 +29,7 @@ afterEach(async () => {
 describe('Private authorizer host factory', () => {
   it('hooks the real approval/request channel and consume returns literal true', async () => {
     const ctx = new Context()
-    const fibers = [await ctx.plugin(SessionStore), await ctx.plugin(SessionProjectionRegistry), await ctx.plugin(ApprovalService)]
+    const fibers = [await ctx.plugin(SessionStore), await ctx.plugin(SessionProjectionRegistry), await ctx.plugin(ApprovalService), await ctx.plugin(AgentRegistry)]
     ctx.provide('shell', { sandboxMode: 'danger-full-access', run() { throw new Error('No dispatch') } })
     fibers.push(await ctx.plugin(PermissionPresetService, { presets: { 'approve-for-me': { sandbox: 'danger-full-access', approval: 'ask' } }, defaultPreset: 'approve-for-me' }))
     const workspace = join(root, 'workspace'), source = join(root, 'example-plugin'), harness = join(root, 'harness')

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -170,10 +172,22 @@ describe('recoverable approval failures', () => {
 })
 
 describe('real shipped ApprovalService integration', () => {
-  it('preserves the native asked/decided pair through an offline-reviewer human handoff', async () => {
+  async function liveAgent(policy: 'ask' | 'never') {
     const ctx = new Context()
-    const fiber = await ctx.plugin(ApprovalService, { policy: 'ask' })
-    const { value: owner, appended } = agent()
+    const bases = [await ctx.plugin(SessionStore), await ctx.plugin(SessionProjectionRegistry)]
+    const fiber = await ctx.plugin(ApprovalService, { policy })
+    const session = ctx.sessions.create(SessionId('session-test'))
+    session.append('turn/start', { turn: 1 })
+    const owner = { id: 'session-test', inject: vi.fn(), cancel: vi.fn(), session } as unknown as Agent
+    return {
+      ctx, owner,
+      dispose: async () => { await fiber.dispose(); for (const base of bases.reverse()) await base.dispose() },
+      appended: () => session.snapshotEvents().filter(event => event.type === 'approval/asked' || event.type === 'approval/decided'),
+    }
+  }
+
+  it('preserves the native asked/decided pair through an offline-reviewer human handoff', async () => {
+    const { ctx, owner, dispose, appended } = await liveAgent('ask')
     const { exec, coordinator, review } = harness(owner)
     const human = vi.fn(async (): Promise<ApprovalOutcome> => 'allowed-once')
     ctx.on('approval/request', human)
@@ -183,22 +197,21 @@ describe('real shipped ApprovalService integration', () => {
     const result = await ctx.approval.request({ agent: owner, toolName: exec.name, callId: exec.callId, reason: gate.reason })
     expect(result).toBe('allowed-once')
     expect(review).toHaveBeenCalledOnce(); expect(human).toHaveBeenCalledOnce()
-    expect(appended.map(event => event.type)).toEqual(['approval/asked', 'approval/decided'])
-    expect(appended[1]?.data).toMatchObject({ id: appended[0]?.data['id'], outcome: 'allowed-once' })
-    await fiber.dispose()
+    const events = appended()
+    expect(events.map(event => event.type)).toEqual(['approval/asked', 'approval/decided'])
+    expect(events[1]?.data).toMatchObject({ id: events[0]?.data['id'], outcome: 'allowed-once' })
+    await dispose()
   })
 
   it('never is enforced before this reviewer or any human answerer', async () => {
-    const ctx = new Context()
-    const fiber = await ctx.plugin(ApprovalService, { policy: 'never' })
-    const { value: owner, appended } = agent()
+    const { ctx, owner, dispose, appended } = await liveAgent('never')
     const { exec, coordinator, review } = harness(owner)
     const human = vi.fn(async (): Promise<ApprovalOutcome> => 'allowed-once')
     ctx.on('approval/request', human)
     ctx.on('approval/request', (request, next) => coordinator.approvalRequest(request, next), { prepend: true })
     const result = await ctx.approval.request({ agent: owner, toolName: exec.name, callId: exec.callId })
     expect(result).toBe('rejected'); expect(review).not.toHaveBeenCalled(); expect(human).not.toHaveBeenCalled()
-    expect(appended[1]?.data['outcome']).toBe('rejected')
-    await fiber.dispose()
+    expect(appended()[1]?.data['outcome']).toBe('rejected')
+    await dispose()
   })
 })

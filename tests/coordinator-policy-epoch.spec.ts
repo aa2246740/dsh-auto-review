@@ -4,6 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import ApprovalService, { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
@@ -21,7 +22,7 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 async function flush() { for (let index = 0; index < 20; index += 1) await Promise.resolve() }
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); vi.restoreAllMocks() })
 async function fixture(hook = true, options: CoordinatorOptions = {}) {
-  const ctx = new Context(), bases = [await ctx.plugin(SessionStore), await ctx.plugin(ApprovalService)]
+  const ctx = new Context(), bases = [await ctx.plugin(SessionStore), await ctx.plugin(SessionProjectionRegistry), await ctx.plugin(ApprovalService)]
   const session = ctx.sessions.create(SessionId('epoch-session'))
   session.append('turn/start', { turn: 1 })
   const agent = { session, inject: vi.fn(), cancel: vi.fn() } as unknown as Agent
@@ -110,7 +111,9 @@ describe('Committed permission epochs cannot revive an old AI/native question', 
     expect(next).not.toHaveBeenCalled()
   })
   it('shared entry hook ignores forged, uncommitted and foreign Session event objects', async () => {
-    const h = await fixture(), promise = h.coordinator.preExecute(h.exec, { kind: 'ask' })
+    // 0.2.2 projections fold every session/event delivery, so a forged emit can
+    // change the official approval fold. This case pins the coordinator hook only.
+    const h = await fixture(true, { canAsk: () => true }), promise = h.coordinator.preExecute(h.exec, { kind: 'ask' })
     await flush()
     const other = h.ctx.sessions.create(SessionId('foreign-epoch'))
     other.append('turn/start', { turn: 1 })
